@@ -16,6 +16,10 @@
 #include "mt6768-afe-gpio.h"
 #include "../../codecs/mt6358.h"
 #include "../common/mtk-sp-spk-amp.h"
+
+#if IS_ENABLED(CONFIG_LCT_AUDIO_INFO)
+extern int lct_audio_info_create_sysfs(void);
+#endif
 #if IS_ENABLED(CONFIG_AW862xx_HAPTIC)
 #include "mt6768-mt6358-ref.h"
 #endif
@@ -1003,6 +1007,10 @@ static int mt6768_mt6358_dev_probe(struct platform_device *pdev)
 	int i = 0;
 
 	dev_info(&pdev->dev, "%s()\n", __func__);
+
+#if IS_ENABLED(CONFIG_LCT_AUDIO_INFO)
+	lct_audio_info_create_sysfs();
+#endif
 
 	/* update speaker type */
 	ret = mtk_spk_update_info(card, pdev);
