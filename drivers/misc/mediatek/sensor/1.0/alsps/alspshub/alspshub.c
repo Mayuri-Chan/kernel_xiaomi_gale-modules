@@ -40,6 +40,17 @@ struct alspshub_ipi_data {
 	struct wakeup_source *ps_wake_lock;
 };
 
+#if IS_REACHABLE(CONFIG_TOUCHSCREEN_COMMON)
+extern void set_lct_tp_proximity_switch_status(bool en);
+extern bool ps_send_touch_event_probe;
+extern int (*tp_ps_send_touch_event)(int32_t data);
+
+static int ps_send_touch_event(int32_t data)
+{
+	return sensor_cfg_to_hub(ID_PROXIMITY, (uint8_t *)&data, sizeof(data));
+}
+#endif
+
 static struct alspshub_ipi_data *obj_ipi_data;
 static int ps_get_data(int *value, int *status);
 
@@ -746,6 +757,12 @@ static int ps_enable_nodata(int en)
 		WRITE_ONCE(obj->ps_android_enable, true);
 	else
 		WRITE_ONCE(obj->ps_android_enable, false);
+
+#if IS_REACHABLE(CONFIG_TOUCHSCREEN_COMMON)
+	ps_send_touch_event_probe = true;
+	tp_ps_send_touch_event = ps_send_touch_event;
+	set_lct_tp_proximity_switch_status(en);
+#endif
 
 	res = sensor_enable_to_hub(ID_PROXIMITY, en);
 	if (res < 0) {

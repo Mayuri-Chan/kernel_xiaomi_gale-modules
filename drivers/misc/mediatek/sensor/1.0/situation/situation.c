@@ -140,6 +140,8 @@ int sar_data_report_t(int32_t value[3], int64_t time_stamp)
 }
 EXPORT_SYMBOL_GPL(sar_data_report_t);
 
+EXPORT_SYMBOL_GPL(sar_data_report_t);
+
 int sar_data_report(int32_t value[3])
 {
 	return sar_data_report_t(value, 0);
