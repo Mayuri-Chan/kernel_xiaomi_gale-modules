@@ -163,3 +163,7 @@ obj-$(CONFIG_MTK_SPM_VHOST_DMABUF_PHYS) += vhost_dmabuf_phys/
 obj-$(CONFIG_MTK_PKVM_SMMU) += pkvm_smmu/
 
 obj-$(CONFIG_MIEV) += miev/
+
+obj-y += cpumaxfreq/
+obj-y += simtray/
+obj-$(CONFIG_PERF_HELPER) += kswapd_aff/

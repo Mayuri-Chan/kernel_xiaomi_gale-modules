@@ -537,3 +537,7 @@ config SCP_DVFS_MT6771
          If unsure, say N.
 
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/miev/Kconfig"
+
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/cpumaxfreq/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/simtray/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/kswapd_aff/Kconfig"
