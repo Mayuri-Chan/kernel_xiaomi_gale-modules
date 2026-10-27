@@ -197,3 +197,4 @@ config MTK_DP_AS_CRTC0
 	  MTK_DP_AS_CRTC0 for auto.
 
 source "$(KCONFIG_EXT_PREFIX)drivers/gpu/drm/mediatek/mediatek_v2/mtk_drm_edp/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/gpu/drm/mediatek/mediatek_v2/mi_disp/Kconfig"
