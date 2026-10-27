@@ -62,4 +62,7 @@ source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/synaptics_dsx_96789/Kconf
 source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/synaptics_dsx_96851/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/NT36532/Kconfig"
 
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/lct_tp/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/xiaomi/Kconfig"
+
 endif
