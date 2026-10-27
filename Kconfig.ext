@@ -126,6 +126,5 @@ source "$(KCONFIG_EXT_PREFIX)drivers/hypervisor/nebula/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)/drivers/video/backlight/Kconfig"
 
-source "$(KCONFIG_EXT_PREFIX)drivers/input/fingerprint/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)sound/soc/codecs/lct_audio_pa_info/Kconfig"
