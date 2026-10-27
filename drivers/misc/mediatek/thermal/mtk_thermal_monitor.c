@@ -232,6 +232,8 @@ static int mtk_thermal_get_tz_idx(char *type)
 		return MTK_THERMAL_SENSOR_NR_PA;
 	else if (strncmp(type, "mtktsdctm", 9) == 0)
 		return MTK_THERMAL_SENSOR_DCTM;
+	else if (strncmp(type, "mtktschargeic", 12) == 0)
+		return MTK_THERMAL_SENSOR_CHARGERIC;
 	else if (strncmp(type, "mtktscharger", 12) == 0)
 		return MTK_THERMAL_SENSOR_CHARGER;
 
@@ -2082,6 +2084,7 @@ static int __init thermal_monitor_init(void)
 		mtkts_dctm_init();
 		wmt_tm_init();
 		tsallts_init();
+		mtkts_chargeic_init();
 		return 0;
 }
 
@@ -2117,6 +2120,7 @@ static void __exit thermal_monitor_exit(void)
 	mtkts_dctm_exit();
 	wmt_tm_deinit();
 	tsallts_exit();
+	mtkts_chargeic_exit();
 }
 
 

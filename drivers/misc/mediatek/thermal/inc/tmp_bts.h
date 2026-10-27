@@ -37,6 +37,14 @@
 
 #define BTSMDPA_RAP_ADC_CHANNEL		AUX_IN1_NTC /* default is 1 */
 
+#define APPLY_PRECISE_CHARGEIC_TEMP
+#define AUX_IN4_NTC (4)
+#define CHARGEIC_RAP_PULL_UP_R 390000
+#define CHARGEIC_TAP_OVER_CRITICAL_LOW 4397119
+#define CHARGEIC_RAP_PULL_UP_VOLTAGE 1800
+#define CHARGEIC_RAP_NTC_TABLE 7
+#define CHARGEIC_RAP_ADC_CHANNEL AUX_IN4_NTC
+
 extern int IMM_GetOneChannelValue(int dwChannel, int data[4], int *rawdata);
 extern int IMM_IsAdcInitReady(void);
 

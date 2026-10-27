@@ -281,3 +281,4 @@ thermal_monitor-y += common/coolers/mtk_cooler_bcct_2nd.o
 thermal_monitor-y += v3/src/mtk_pmic_efuse.o
 #thermal_monitor-y += common/thermal_zones/mtk_ts_charger2.o
 endif
+thermal_monitor-y += common/thermal_zones/mtk_ts_charge_ic.o
