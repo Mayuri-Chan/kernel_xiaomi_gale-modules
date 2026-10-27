@@ -99,3 +99,9 @@ $(eval $(call add_subdrv,camera_project/$(MTK_SENSOR_PROJECT)/camera_hw))
 subdir-ccflags-y += -I$(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_project/$(MTK_SENSOR_PROJECT)/camera_hw
 subdir-ccflags-y += -I$(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_hw
 endif
+
+obj-$(CONFIG_GC_GC6133C_I) += gc_gc6133c_i.o
+gc_gc6133c_i-objs := ../common/$(COMMON_VERSION)/gc_gc6133c_i/gc_gc6133c_i.o
+
+obj-$(CONFIG_SC_SC080CS_II) += sc_sc080cs_ii.o
+sc_sc080cs_ii-objs := ../common/$(COMMON_VERSION)/sc_sc080cs_ii/sc_sc080cs_ii.o

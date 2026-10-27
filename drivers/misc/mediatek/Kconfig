@@ -541,3 +541,11 @@ source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/miev/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/cpumaxfreq/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/simtray/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/kswapd_aff/Kconfig"
+
+config GC_GC6133C_I
+	tristate "camera QVGA module 1"
+	default n
+
+config SC_SC080CS_II
+	tristate "camera QVGA module 2"
+	default n
