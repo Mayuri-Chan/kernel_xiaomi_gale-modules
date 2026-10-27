@@ -63,6 +63,7 @@
 #include <linux/version.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+
 #include <net/sock.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spidev.h>
@@ -71,10 +72,8 @@
 
 #include <linux/interrupt.h>
 #include <linux/irq.h>
-
+#include <linux/proc_fs.h>
 #include <linux/delay.h>
-#include "silead_fp.h"
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
 #include <linux/wakelock.h>
 #endif
@@ -85,16 +84,20 @@
 #include <linux/notifier.h>
 #endif
 
+#include "silead_fp.h"
 
 #define FP_DEV_NAME "silead_fp"
-#define FP_DEV_MAJOR 0	/* assigned */
+#define FP_DEV_MAJOR 0 /* assigned */
 
 #define FP_CLASS_NAME "silead_fp"
-#define FP_INPUT_NAME "fp-keys"
+#define FP_INPUT_NAME "uinput-silead"
 
 #define FP_DEV_VERSION "v0.3.7"
 
-#define BSP_SIL_IRQ_ASYNC  /* IRQ use asynchrous mode. */
+#define BSP_SIL_IRQ_ASYNC /* IRQ use asynchrous mode. */
+
+#define PROC_NAME "hwinfo"
+static struct proc_dir_entry *proc_entry;
 
 #ifndef BSP_SIL_NETLINK
 struct silfp_msg_list {
@@ -103,15 +106,84 @@ struct silfp_msg_list {
 };
 #endif /* !BSP_SIL_NETLINK */
 
+struct silfp_data {
+    dev_t devt;
+    struct cdev cdev;
+    spinlock_t spi_lock;
+    struct platform_device *spi;
+    struct spi_device *spi1;
+    struct list_head device_entry;
+
+    unsigned users;
+
+    struct device *dev;
+    int ref;
+
+    struct input_dev *input;
+
+    spinlock_t irq_lock;
+    int int_port;
+    int irq;
+    s32 irq_is_disable;
+    int irq_no_use;
+    int irq_ignore;
+    s32 power_is_off;
+    int rst_port;
+    struct work_struct work;
+    struct completion done;
+    struct wake_lock wakelock;
+    struct wake_lock wakelock_hal;
+
+#ifdef BSP_SIL_NETLINK
+    /* for netlink use */
+    struct sock *nl_sk;
+#else
+    spinlock_t read_lock;
+    wait_queue_head_t read_queue;
+    struct list_head msg_q;
+#endif
+    struct fp_dev_kmap_t keymap_cust;
+
+    int scr_off;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    struct early_suspend es;
+#else
+    struct notifier_block notif;
+#endif /* CONFIG_HAS_EARLYSUSPEND */
+
+    /* for power supply */
+#ifdef BSP_SIL_POWER_SUPPLY_REGULATOR
+    struct regulator *avdd_ldo;
+    struct regulator *vddio_ldo;
+#endif /* BSP_SIL_POWER_SUPPLY_REGULATOR */
+#ifdef BSP_SIL_POWER_SUPPLY_GPIO
+    int avdd_port;
+    int vddio_port;
+#endif /* BSP_SIL_POWER_SUPPLY_GPIO */
+#ifdef PROC_NODE
+    struct proc_dir_entry *proc_root;
+    struct proc_dir_entry *proc_entry;
+#endif /* PROC_NODE */
+#ifdef SUPPORT_SPEED_SCREEN_UNBLANK
+    u8 wait_finger_down;
+#endif
+    /* for spi enable/disable */
+    atomic_t spionoff_count;
+
+    struct fp_plat_t pin;
+
+    atomic_t init;
+};
+
 typedef enum _fp_spi_speet_t {
-    SPEED_1M=1*1000*1000,
+    SPEED_1M = 1 * 1000 * 1000,
     SPEED_LOW = SPEED_1M,
-    SPEED_5M=5*1000*1000,
+    SPEED_5M = 5 * 1000 * 1000,
     SPEED_MEDIUM = SPEED_5M,
-    SPEED_8M=8*1000*1000,
-    SPEED_9M=9*1000*1000,
-    SPEED_HIGH=SPEED_8M,
-    SPEED_10M=10*1000*1000,
+    SPEED_8M = 8 * 1000 * 1000,
+    SPEED_9M = 9 * 1000 * 1000,
+    SPEED_HIGH = SPEED_8M,
+    SPEED_10M = 10 * 1000 * 1000,
 } fp_spi_speet_t;
 
 static struct fp_dev_init_t silfp_dev_init_d = {
@@ -122,7 +194,6 @@ static struct fp_dev_init_t silfp_dev_init_d = {
     .dev = DEVICE,
     .nl_id = SIFP_NETLINK_ROUTE,
     .dev_id = 0,
-    .pwr_off = 0, /* if platform support poweroff, need set to 1 */
 };
 
 /* on some platform, home key has been redefine to KEY_HOMEPAGE! */
@@ -130,14 +201,14 @@ static struct fp_dev_init_t silfp_dev_init_d = {
    out/target/product/.../system/usr/keylayout/Generic.kl
    kernel/include/uapi/linux/input.h
 
-	KEY_HOMEPAGE
-	KEY_HOME
-	KEY_MENU
-	KEY_BACK
-	KEY_POWER
-	KEY_CAMERA
-	KEY_VOLUMEUP
-	KEY_VOLUMEDOWN */
+    KEY_HOMEPAGE
+    KEY_HOME
+    KEY_MENU
+    KEY_BACK
+    KEY_POWER
+    KEY_CAMERA
+    KEY_VOLUMEUP
+    KEY_VOLUMEDOWN */
 
 typedef struct _key_map {
     int key_orig;
@@ -145,13 +216,34 @@ typedef struct _key_map {
 } nav_keymap_t;
 
 static nav_keymap_t keymap[] = {
-    { NAV_KEY_UP,       KEY_UP,         }, /* KEY_RESERVED, ignore this key */
-    { NAV_KEY_DOWN,     KEY_DOWN,       },
-    { NAV_KEY_RIGHT,    KEY_RIGHT,      },
-    { NAV_KEY_LEFT,     KEY_LEFT,       },
-    { NAV_KEY_CLICK,    KEY_HOMEPAGE,   },
-    { NAV_KEY_DCLICK,   KEY_HOMEPAGE,   },
-    { NAV_KEY_LONGPRESS,KEY_HOMEPAGE,   },
+    {
+        NAV_KEY_UP,
+        353,
+    }, /* KEY_RESERVED, ignore this key */
+    {
+        NAV_KEY_DOWN,
+        353,
+    },
+    {
+        NAV_KEY_RIGHT,
+        353,
+    },
+    {
+        NAV_KEY_LEFT,
+        353,
+    },
+    {
+        NAV_KEY_CLICK,
+        353,
+    },
+    {
+        NAV_KEY_DCLICK,
+        306,
+    },
+    {
+        NAV_KEY_LONGPRESS,
+        353,
+    },
 };
 
 static LIST_HEAD(device_list);
@@ -165,22 +257,41 @@ static int pid;
 static char vendor_name[PROC_VND_ID_LEN];
 #endif /* PROC_NODE */
 
+#ifdef SUPPORT_SPEED_SCREEN_UNBLANK
+#define WAKELOCK_HOLD_TIME 2000 /* in ms */
+#define FP_UNLOCK_REJECTION_TIMEOUT (WAKELOCK_HOLD_TIME - 500) /*ms*/
+extern int mtk_drm_early_resume(int timeout);
+static struct work_struct fp_display_work;
+#endif
+
 struct class *silfp_class;
 
 static struct workqueue_struct *silfp_wq;
 struct silfp_data *g_fp_dev = NULL;
 
+static void silfp_hw_reset(struct silfp_data *fp_dev, u8 delay);
+static void silfp_irq_disable(struct silfp_data *fp_dev);
 static void silfp_irq_enable(struct silfp_data *fp_dev);
 static int silfp_wait_irq(struct silfp_data *fp_dev);
 static int silfp_irq_status(struct silfp_data *fp_dev);
+static int silfp_resource_init(struct silfp_data *fp_dev, struct fp_dev_init_t *dev_info);
 static int silfp_resource_deinit(struct silfp_data *fp_dev);
+static void silfp_power_deinit(struct silfp_data *fp_dev);
+static void silfp_pwdn(struct silfp_data *fp_dev, u8 flag_avdd);
+static void silfp_hw_poweron(struct silfp_data *fp_dev);
+static int silfp_set_feature(struct silfp_data *fp_dev, u8 feature);
+extern struct spi_device *spi_fingerprint;
+struct silfp_data silfp_dev;
+extern bool fpc1022_fp_exist;
+extern bool goodix_fp_exist;
 
 /* debug log level */
 #ifndef BSP_SIL_DYNAMIC_SPI
-//static
+static
 #endif
-fp_debug_level_t sil_debug_level = ALL_LOG;
+    fp_debug_level_t sil_debug_level = ALL_LOG;
 
+#include PLAT_H
 
 /* -------------------------------------------------------------------- */
 /*                            netlink functions                         */
@@ -190,7 +301,7 @@ static void silfp_netlink_send(struct silfp_data *fp_dev, const int cmd)
 {
     struct nlmsghdr *nlh = NULL;
     struct sk_buff *skb = NULL;
-    int    ret;
+    int ret;
 
     LOG_MSG_DEBUG(INFO_LOG, "[%s] send cmd %d\n", __func__, cmd);
     if (!fp_dev || !fp_dev->nl_sk) {
@@ -235,10 +346,10 @@ static void silfp_netlink_recv(struct sk_buff *__skb)
 {
     struct sk_buff *skb = NULL;
     struct nlmsghdr *nlh = NULL;
-    char   str[128];
+    char str[128];
 
     skb = skb_get(__skb);
-    if (!skb ) {
+    if (!skb) {
         LOG_MSG_DEBUG(ERR_LOG, "[%s] skb NULL\n", __func__);
         return;
     }
@@ -247,7 +358,7 @@ static void silfp_netlink_recv(struct sk_buff *__skb)
     if (skb->len >= NLMSG_SPACE(0)) {
         nlh = nlmsg_hdr(skb);
         memcpy(str, NLMSG_DATA(nlh), sizeof(str));
-        if ((strlen(str) == strlen("FP")) && !strncmp(str,"FP", strlen(str))) {
+        if ((strlen(str) == strlen("FP")) && !strncmp(str, "FP", strlen(str))) {
             pid = nlh->nlmsg_pid;
             LOG_MSG_DEBUG(ERR_LOG, "[%s] PID=%d, msg=%s\n", __func__, pid, str);
         } else {
@@ -334,7 +445,8 @@ static int silfp_netlink_destroy(struct silfp_data *fp_dev)
 
     if (fp_dev && (!list_empty(&fp_dev->msg_q))) {
         spin_lock_irqsave(&fp_dev->read_lock, flags);
-        list_for_each_entry_safe(list, next, &fp_dev->msg_q, list) {
+        list_for_each_entry_safe(list, next, &fp_dev->msg_q, list)
+        {
             list_del(&list->list);
             kfree(list);
         }
@@ -368,7 +480,7 @@ static unsigned int silfp_poll(struct file *fd, poll_table *wait)
     return mask;
 }
 
-static ssize_t silfp_read(struct file *fd, char __user *buf, size_t len,loff_t *ptr)
+static ssize_t silfp_read(struct file *fd, char __user *buf, size_t len, loff_t *ptr)
 {
     struct silfp_data *fp_dev;
     struct silfp_msg_list *list;
@@ -385,7 +497,7 @@ static ssize_t silfp_read(struct file *fd, char __user *buf, size_t len,loff_t *
     }*/
 
     spin_lock_irqsave(&fp_dev->read_lock, flags);
-    while(list_empty(&fp_dev->msg_q)) {
+    while (list_empty(&fp_dev->msg_q)) {
         spin_unlock_irqrestore(&fp_dev->read_lock, flags);
         if (wait_event_interruptible(fp_dev->read_queue, !list_empty(&fp_dev->msg_q)) < 0) {
             return -EINVAL;
@@ -416,7 +528,6 @@ static ssize_t silfp_read(struct file *fd, char __user *buf, size_t len,loff_t *
 }
 #endif /* BSP_SIL_NETLINK */
 
-
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void silfp_early_suspend(struct early_suspend *es)
 {
@@ -445,12 +556,12 @@ static int silfp_fb_callback(struct notifier_block *notif,
     unsigned int blank;
     int retval = 0;
 
+    blank = *(int *)evdata->data;
+    pr_err("[XMFP]: [%s] : enter, blank=0x%x\n", __func__, blank);
     /* If we aren't interested in this event, skip it immediately ... */
     if (event != SIL_EVENT_BLANK /* FB_EARLY_EVENT_BLANK */) {
         return 0;
     }
-
-    blank = *(int *)evdata->data;
 
     LOG_MSG_DEBUG(INFO_LOG, "[%s] enter, blank=0x%x\n", __func__, blank);
 
@@ -464,6 +575,7 @@ static int silfp_fb_callback(struct notifier_block *notif,
     case SIL_EVENT_POWERDOWN:
         LOG_MSG_DEBUG(INFO_LOG, "[%s] LCD OFF\n", __func__);
         fp_dev->scr_off = 1;
+        fp_dev->wait_finger_down = true;
         silfp_netlink_send(fp_dev, SIFP_NETLINK_SCR_OFF);
         break;
 
@@ -474,6 +586,22 @@ static int silfp_fb_callback(struct notifier_block *notif,
     return retval;
 }
 #endif /* CONFIG_HAS_EARLYSUSPEND */
+
+/* -------------------------------------------------------------------- */
+/*                            IRQ related functions                     */
+/* -------------------------------------------------------------------- */
+static void silfp_irq_disable(struct silfp_data *fp_dev)
+{
+    unsigned long irqflags;
+
+    spin_lock_irqsave(&fp_dev->irq_lock, irqflags);
+    if (!fp_dev->irq_is_disable) {
+        fp_dev->irq_is_disable = 1;
+        disable_irq_nosync(fp_dev->irq);
+        LOG_MSG_DEBUG(INFO_LOG, "[%s] irq disabled\n", __func__);
+    }
+    spin_unlock_irqrestore(&fp_dev->irq_lock, irqflags);
+}
 
 static void silfp_irq_enable(struct silfp_data *fp_dev)
 {
@@ -493,7 +621,7 @@ static int silfp_wait_irq(struct silfp_data *fp_dev)
 {
     // this function is obsolete, for test purpose only.
     wait_for_completion(&fp_dev->done);
-    //return wait_for_completion_timeout(&fp_dev->done, msecs_to_jiffies(3000));
+    // return wait_for_completion_timeout(&fp_dev->done, msecs_to_jiffies(3000));
     return 1;
 }
 
@@ -506,7 +634,7 @@ static int silfp_irq_status(struct silfp_data *fp_dev)
     return -1;
 }
 
-irqreturn_t silfp_irq_handler(int irq, void *dev_id)
+static irqreturn_t silfp_irq_handler(int irq, void *dev_id)
 {
     struct silfp_data *fp_dev = (struct silfp_data *)dev_id;
 
@@ -518,8 +646,8 @@ irqreturn_t silfp_irq_handler(int irq, void *dev_id)
     if (gpio_get_value(fp_dev->int_port)) {
 #else
     if (true) {
-#endif /* BSP_SIL_IRQ_CONFIRM */
-         wake_lock_timeout(&fp_dev->wakelock, 10*HZ); /* set a little long for a poor MCU */
+#endif                                                 /* BSP_SIL_IRQ_CONFIRM */
+        wake_lock_timeout(&fp_dev->wakelock, 10 * HZ); /* set a little long for a poor MCU */
 #ifdef BSP_SIL_IRQ_ASYNC
         queue_work(silfp_wq, &fp_dev->work);
 #else
@@ -529,9 +657,14 @@ irqreturn_t silfp_irq_handler(int irq, void *dev_id)
     } else {
         LOG_MSG_DEBUG(INFO_LOG, "[%s] irq ignore\n", __func__);
     }
-
+#ifdef SUPPORT_SPEED_SCREEN_UNBLANK
+    if ((fp_dev->wait_finger_down == true) && (fp_dev->scr_off == 1)) {
+       pr_err("[XMFP]: %s enter fingerdown & fb_black then schedule_work\n", __func__);
+       fp_dev->wait_finger_down = false;
+       schedule_work(&fp_display_work);
+    }
+#endif
     return IRQ_HANDLED;
-
 }
 
 static void silfp_work_func(struct work_struct *work)
@@ -543,37 +676,21 @@ static void silfp_work_func(struct work_struct *work)
 }
 
 /* -------------------------------------------------------------------- */
-/*                            IRQ related functions                     */
-/* -------------------------------------------------------------------- */
-void silfp_irq_disable(struct silfp_data *fp_dev)
-{
-    unsigned long irqflags;
-
-    spin_lock_irqsave(&fp_dev->irq_lock, irqflags);
-    if (!fp_dev->irq_is_disable) {
-        fp_dev->irq_is_disable = 1;
-        disable_irq_nosync(fp_dev->irq);
-        LOG_MSG_DEBUG(INFO_LOG, "[%s] irq disabled\n", __func__);
-    }
-    spin_unlock_irqrestore(&fp_dev->irq_lock, irqflags);
-}
-
-/* -------------------------------------------------------------------- */
 /*                          key event functions                         */
 /* -------------------------------------------------------------------- */
-static int silfp_keyevent(struct silfp_data	*fp_dev, struct fp_dev_key_t *pkey)
+static int silfp_keyevent(struct silfp_data *fp_dev, struct fp_dev_key_t *pkey)
 {
     int ret = -EFAULT;
     int i;
 
-    //LOG_MSG_DEBUG(INFO_LOG, "[%s] key %d, flag %d\n", __func__,pkey->value,pkey->flag);
+    // LOG_MSG_DEBUG(INFO_LOG, "[%s] key %d, flag %d\n", __func__,pkey->value,pkey->flag);
     if (!fp_dev->input) {
-        LOG_MSG_DEBUG(INFO_LOG, "[%s] invalid input device\n",__func__);
+        LOG_MSG_DEBUG(INFO_LOG, "[%s] invalid input device\n", __func__);
         return -1;
     }
     if (IS_KEY_VALID(pkey->value)) {
         /* Translate Click Down/Up key to Click key. */
-        switch( pkey->value ) {
+        switch (pkey->value) {
         case NAV_KEY_CLICK_DOWN:
             pkey->value = NAV_KEY_CLICK;
             pkey->flag = NAV_KEY_FLAG_DOWN;
@@ -588,7 +705,7 @@ static int silfp_keyevent(struct silfp_data	*fp_dev, struct fp_dev_key_t *pkey)
 
         /* Check the custom define keymap */
         if (fp_dev->keymap_cust.k[pkey->value - NAV_KEY_START]) {
-            LOG_MSG_DEBUG(INFO_LOG, "[%s] custom-key %d\n", __func__,fp_dev->keymap_cust.k[pkey->value - NAV_KEY_START]);
+            LOG_MSG_DEBUG(INFO_LOG, "[%s] custom-key %d\n", __func__, fp_dev->keymap_cust.k[pkey->value - NAV_KEY_START]);
             if (KEY_RESERVED != fp_dev->keymap_cust.k[pkey->value - NAV_KEY_START]) {
                 if (NAV_KEY_FLAG_CLICK == pkey->flag) {
                     input_report_key(fp_dev->input, fp_dev->keymap_cust.k[pkey->value - NAV_KEY_START], NAV_KEY_FLAG_DOWN);
@@ -608,7 +725,7 @@ static int silfp_keyevent(struct silfp_data	*fp_dev, struct fp_dev_key_t *pkey)
 
     for (i = 0; ret && i < ARRAY_SIZE(keymap); i++) {
         if (keymap[i].key_orig == pkey->value) {
-            LOG_MSG_DEBUG(INFO_LOG, "[%s] key %d\n", __func__,keymap[i].key_new);
+            LOG_MSG_DEBUG(INFO_LOG, "[%s] key %d\n", __func__, keymap[i].key_new);
             if (KEY_RESERVED != keymap[i].key_new) {
                 if (NAV_KEY_FLAG_CLICK == pkey->flag) {
                     input_report_key(fp_dev->input, keymap[i].key_new, NAV_KEY_FLAG_DOWN);
@@ -627,7 +744,7 @@ static int silfp_keyevent(struct silfp_data	*fp_dev, struct fp_dev_key_t *pkey)
     }
 
     if (ret) {
-        LOG_MSG_DEBUG(INFO_LOG, "[%s] unregister custom-key %d\n", __func__,pkey->value);
+        LOG_MSG_DEBUG(INFO_LOG, "[%s] unregister custom-key %d\n", __func__, pkey->value);
         input_report_key(fp_dev->input, pkey->value, pkey->flag);
         input_sync(fp_dev->input);
         ret = 0;
@@ -651,8 +768,9 @@ static int silfp_proc_open(struct inode *inode, struct file *file)
 }
 
 static const struct proc_ops silfp_proc_fops = {
-    .proc_read  = seq_read,
-    .proc_open  = silfp_proc_open,
+    //.owner = THIS_MODULE,
+    .proc_read = seq_read,
+    .proc_open = silfp_proc_open,
     .proc_release = single_release,
 };
 
@@ -694,7 +812,6 @@ static int silfp_proc_init(struct silfp_data *fp_dev)
         fp_dev->proc_entry = NULL;
     }
     return 0;
-
 }
 
 static void silfp_proc_deinit(struct silfp_data *fp_dev)
@@ -714,7 +831,6 @@ static void silfp_proc_deinit(struct silfp_data *fp_dev)
 }
 #endif /* PROC_NODE */
 
-
 /* -------------------------------------------------------------------- */
 /*                          class node functions                         */
 /* -------------------------------------------------------------------- */
@@ -727,10 +843,10 @@ static ssize_t silfp_class_show(struct device *dev, struct device_attribute *att
     return sprintf(buf, "%d\n", 1);
 }
 
-static DEVICE_ATTR(CLASS_NODE_NAME, S_IRUSR|S_IRGRP|S_IROTH, silfp_class_show, NULL);
+static DEVICE_ATTR(CLASS_NODE_NAME, S_IRUSR | S_IRGRP | S_IROTH, silfp_class_show, NULL);
 
 struct file_operations silfp_class_node_ops = {
-    .owner  = THIS_MODULE,
+    .owner = THIS_MODULE,
 };
 
 static int silfp_class_init(void)
@@ -768,7 +884,7 @@ static void silfp_class_deinit(void)
 /* -------------------------------------------------------------------- */
 /*                         init/deinit functions                        */
 /* -------------------------------------------------------------------- */
-int silfp_input_init(struct silfp_data *fp_dev)
+static int silfp_input_init(struct silfp_data *fp_dev)
 {
     int i, status = 0;
 
@@ -802,6 +918,8 @@ int silfp_input_init(struct silfp_data *fp_dev)
     }
 
     fp_dev->input->name = FP_INPUT_NAME;
+    fp_dev->input->id.vendor = 0x0666;
+    fp_dev->input->id.product = 0x0888;
     if (input_register_device(fp_dev->input)) {
         LOG_MSG_DEBUG(ERR_LOG, "[%s] input_register_device() fail!\n", __func__);
         input_free_device(fp_dev->input);
@@ -855,7 +973,7 @@ static int silfp_init(struct silfp_data *fp_dev)
     SIL_REGISTER_CLIENT(&fp_dev->notif);
 #endif /* CONFIG_HAS_EARLYSUSPEND */
 
-    atomic_set(&fp_dev->spionoff_count,0);
+    atomic_set(&fp_dev->spionoff_count, 0);
 
     return status;
 }
@@ -911,7 +1029,7 @@ static void silfp_exit(struct silfp_data *fp_dev)
     fb_unregister_client(&fp_dev->notif);
 #endif /* CONFIG_HAS_EARLYSUSPEND */
 
-    //silfp_set_spi(fp_dev, false); /* release SPI resources */
+    // silfp_set_spi(fp_dev, false); /* release SPI resources */
 
     if (silfp_wq) {
         destroy_workqueue(silfp_wq);
@@ -929,7 +1047,7 @@ static void silfp_exit(struct silfp_data *fp_dev)
 static void silfp_wakelock_ctl(struct silfp_data *fp_dev, unsigned char lock)
 {
     if (lock) {
-        wake_lock_timeout(&fp_dev->wakelock_hal, 10*HZ);
+        wake_lock_timeout(&fp_dev->wakelock_hal, 10 * HZ);
     } else {
         wake_unlock(&fp_dev->wakelock_hal);
     }
@@ -939,9 +1057,9 @@ static void silfp_wakelock_ctl(struct silfp_data *fp_dev, unsigned char lock)
 static long
 silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-    int    err = 0;
-    int    retval = 0;
-    struct silfp_data	*fp_dev;
+    int err = 0;
+    int retval = 0;
+    struct silfp_data *fp_dev;
     struct fp_dev_key_t key;
     unsigned char delay;
 
@@ -974,7 +1092,7 @@ silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     switch (cmd) {
     case SIFP_IOC_INIT:
         silfp_netlink_reinit(fp_dev);
-        silfp_resource_init(fp_dev,&silfp_dev_init_d);
+        silfp_resource_init(fp_dev, &silfp_dev_init_d);
         if (copy_to_user((void __user *)arg, (void *)&silfp_dev_init_d, sizeof(struct fp_dev_init_t))) {
             retval = -EFAULT;
         }
@@ -1028,7 +1146,7 @@ silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     case SIFP_IOC_WAIT_IRQ:
         LOG_MSG_DEBUG(INFO_LOG, "[%s] wait irq\n", __func__);
-        retval = __put_user(silfp_wait_irq(fp_dev)?1:0, (__u8 __user *)arg);
+        retval = __put_user(silfp_wait_irq(fp_dev) ? 1 : 0, (__u8 __user *)arg);
         break;
 
     case SIFP_IOC_IRQ_STATUS:
@@ -1038,25 +1156,25 @@ silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     case SIFP_IOC_KEY_EVENT:
         if (copy_from_user(&key, (struct fp_dev_key_t *)arg, sizeof(struct fp_dev_key_t))) {
-            LOG_MSG_DEBUG(ERR_LOG, "[%s] copy key fail?\n",__func__);
+            LOG_MSG_DEBUG(ERR_LOG, "[%s] copy key fail?\n", __func__);
             retval = -EFAULT;
         } else {
-            retval = silfp_keyevent(fp_dev,&key);
+            retval = silfp_keyevent(fp_dev, &key);
         }
         break;
 
     case SIFP_IOC_SCR_STATUS:
         if (arg) {
-            LOG_MSG_DEBUG(INFO_LOG, "[IOC_SCR_STATUS] put v = %d\n",(u8)(!fp_dev->scr_off));
+            LOG_MSG_DEBUG(INFO_LOG, "[IOC_SCR_STATUS] put v = %d\n", (u8)(!fp_dev->scr_off));
             retval = __put_user((u8)(!fp_dev->scr_off), (__u8 __user *)arg);
         } else {
-            LOG_MSG_DEBUG(INFO_LOG, "[IOC_SCR_STATUS] send v = %d\n",(u8)(!fp_dev->scr_off));
-            silfp_netlink_send(fp_dev, fp_dev->scr_off?SIFP_NETLINK_SCR_OFF:SIFP_NETLINK_SCR_ON);
+            LOG_MSG_DEBUG(INFO_LOG, "[IOC_SCR_STATUS] send v = %d\n", (u8)(!fp_dev->scr_off));
+            silfp_netlink_send(fp_dev, fp_dev->scr_off ? SIFP_NETLINK_SCR_OFF : SIFP_NETLINK_SCR_ON);
         }
         break;
 
     case SIFP_IOC_GET_VER:
-        if (copy_to_user((void __user *)arg, (void *)FP_DEV_VERSION, sizeof(char)*7)) {
+        if (copy_to_user((void __user *)arg, (void *)FP_DEV_VERSION, sizeof(char) * 7)) {
             LOG_MSG_DEBUG(ERR_LOG, "[IOC_GET_VER] copy_to fail\n");
             retval = -EFAULT;
         }
@@ -1080,17 +1198,17 @@ silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     case SIFP_IOC_ACQ_SPI:
         LOG_MSG_DEBUG(INFO_LOG, "[%s] acq spi\n", __func__);
-        retval = silfp_set_spi(fp_dev,true);
+        retval = silfp_set_spi(fp_dev, true);
         break;
 
     case SIFP_IOC_RLS_SPI:
         LOG_MSG_DEBUG(INFO_LOG, "[%s] release spi\n", __func__);
-        retval = silfp_set_spi(fp_dev,false);
+        retval = silfp_set_spi(fp_dev, false);
         break;
 
     case SIFP_IOC_PKG_SIZE:
         if (arg) {
-            LOG_MSG_DEBUG(DBG_LOG, "[IOC_PKG_SIZE] %d\n",(u8)(PKG_SIZE));
+            LOG_MSG_DEBUG(DBG_LOG, "[IOC_PKG_SIZE] %d\n", (u8)(PKG_SIZE));
             retval = __put_user((u8)(PKG_SIZE), (__u8 __user *)arg);
         }
         break;
@@ -1098,11 +1216,11 @@ silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     case SIFP_IOC_DBG_LEVEL:
         if (arg) {
             unsigned char level = 0;
-            if (copy_from_user(&level, (void __user *)arg, sizeof(char)) || level > (uint8_t)ALL_LOG ) {
+            if (copy_from_user(&level, (void __user *)arg, sizeof(char)) || level > (uint8_t)ALL_LOG) {
                 retval = -EFAULT;
                 break;
             }
-            LOG_MSG_DEBUG(ERR_LOG, "debug level %d-->%d\n",sil_debug_level,level);
+            LOG_MSG_DEBUG(ERR_LOG, "debug level %d-->%d\n", sil_debug_level, level);
             retval = __put_user((u8)(sil_debug_level), (__u8 __user *)arg);
             sil_debug_level = (fp_debug_level_t)level;
         }
@@ -1174,7 +1292,7 @@ silfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     return retval;
 }
 
-int  silfp_touch_event_handler(struct fp_dev_touch_info* tp_info)
+int silfp_touch_event_handler(struct fp_dev_touch_info *tp_info)
 {
     static uint8_t lasttouchmode = 0;
 
@@ -1199,7 +1317,7 @@ int  silfp_touch_event_handler(struct fp_dev_touch_info* tp_info)
     }
 
     if (g_fp_dev) {
-        wake_lock_timeout(&g_fp_dev->wakelock, 10*HZ);
+        wake_lock_timeout(&g_fp_dev->wakelock, 10 * HZ);
     }
     return 0;
 }
@@ -1217,12 +1335,13 @@ silfp_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 static int silfp_open(struct inode *inode, struct file *filp)
 {
-    struct silfp_data	*fp_dev;
-    int	   status = -ENXIO;
+    struct silfp_data *fp_dev;
+    int status = -ENXIO;
 
     mutex_lock(&device_list_lock);
 
-    list_for_each_entry(fp_dev, &device_list, device_entry) {
+    list_for_each_entry(fp_dev, &device_list, device_entry)
+    {
         if (fp_dev->devt == inode->i_rdev) {
             status = 0;
             break;
@@ -1243,8 +1362,8 @@ static int silfp_open(struct inode *inode, struct file *filp)
 
 static int silfp_release(struct inode *inode, struct file *filp)
 {
-    struct silfp_data	*fp_dev;
-    int    status = 0;
+    struct silfp_data *fp_dev;
+    int status = 0;
 
     mutex_lock(&device_list_lock);
     fp_dev = filp->private_data;
@@ -1261,20 +1380,48 @@ static int silfp_release(struct inode *inode, struct file *filp)
 }
 
 static const struct file_operations silfp_dev_fops = {
-    .owner =	THIS_MODULE,
+    .owner = THIS_MODULE,
     /* REVISIT switch to aio primitives, so that userspace
      * gets more complete API coverage.  It'll simplify things
      * too, except for the locking.
      */
     .unlocked_ioctl = silfp_ioctl,
-    .compat_ioctl   = silfp_compat_ioctl,
-    .open           = silfp_open,
-    .release        = silfp_release,
+    .compat_ioctl = silfp_compat_ioctl,
+    .open = silfp_open,
+    .release = silfp_release,
 #ifndef BSP_SIL_NETLINK
-    .read           = silfp_read,
-    .poll           = silfp_poll,
+    .read = silfp_read,
+    .poll = silfp_poll,
 #endif /* !BSP_SIL_NETLINK */
 };
+
+static int proc_show_ver(struct seq_file *file, void *v)
+{
+    seq_printf(file, "Fingerprint: SILEAD\n");
+    return 0;
+}
+
+static int proc_open(struct inode *inode, struct file *file)
+{
+    pr_info("silead proc_open\n");
+    single_open(file, proc_show_ver, NULL);
+    return 0;
+}
+
+static const struct proc_ops proc_file_fpc_ops = {
+    //.owner = THIS_MODULE,
+    .proc_open = proc_open,
+    .proc_read = seq_read,
+    .proc_release = single_release,
+};
+
+#ifdef SUPPORT_SPEED_SCREEN_UNBLANK
+static void unblank_work(struct work_struct *work)
+{
+    pr_err("[XMFP]: entry %s \n", __func__);
+    mtk_drm_early_resume(FP_UNLOCK_REJECTION_TIMEOUT);
+}
+#endif
 
 /*-------------------------------------------------------------------------*/
 
@@ -1285,11 +1432,11 @@ static const struct file_operations silfp_dev_fops = {
 
 /*-------------------------------------------------------------------------*/
 
-static int silfp_probe(struct spi_device *spi)
+static int silfp_probe(struct platform_device *spi)
 {
-    struct silfp_data *fp_dev;
-    int    status = 0;
-    //unsigned long		minor;
+    struct silfp_data *fp_dev = &silfp_dev;
+    int status = 0;
+    // unsigned long		minor;
 
     LOG_MSG_DEBUG(INFO_LOG, "[%s] enter.\n", __func__);
     /* Allocate driver data */
@@ -1302,10 +1449,12 @@ static int silfp_probe(struct spi_device *spi)
     fp_dev->spi = spi;
     spin_lock_init(&fp_dev->spi_lock);
 
-    wake_lock_init(&fp_dev->wakelock,WAKE_LOCK_SUSPEND,"silfp_wakelock");
-    wake_lock_init(&fp_dev->wakelock_hal,WAKE_LOCK_SUSPEND,"silfp_wakelock_hal");
+    wake_lock_init(&fp_dev->wakelock, WAKE_LOCK_SUSPEND, "silfp_wakelock");
+    wake_lock_init(&fp_dev->wakelock_hal, WAKE_LOCK_SUSPEND, "silfp_wakelock_hal");
     INIT_LIST_HEAD(&fp_dev->device_entry);
-
+    INIT_WORK(&fp_display_work, unblank_work);
+    fp_dev->scr_off = 0;
+    fp_dev->wait_finger_down = false;
     /* If we can allocate a minor number, hook up this device.
      * Reusing minors is fine so long as udev or mdev is working.
      */
@@ -1343,7 +1492,7 @@ static int silfp_probe(struct spi_device *spi)
         goto err_cdev;
     }
 
-    atomic_set(&fp_dev->init,0);
+    atomic_set(&fp_dev->init, 0);
     status = silfp_init(fp_dev);
     g_fp_dev = NULL;
 
@@ -1354,7 +1503,15 @@ static int silfp_probe(struct spi_device *spi)
 #ifdef PROC_NODE
     silfp_proc_init(fp_dev);
 #endif /* PROC_NODE */
-    spi_set_drvdata(spi, fp_dev);
+    platform_set_drvdata(spi, fp_dev);
+
+    proc_entry = proc_create(PROC_NAME, 0644, NULL, &proc_file_fpc_ops);
+    if (NULL == proc_entry) {
+        pr_err("silead gsl6135 Couldn't create proc entry!");
+        return -ENOMEM;
+    } else {
+        pr_err("silead gsl6135 Create proc entry success!");
+    }
 
     return status;
 
@@ -1365,7 +1522,7 @@ err_dev:
     unregister_chrdev_region(fp_dev->devt, 1);
 
 err_devt:
-    spi_set_drvdata(spi, NULL);
+    platform_set_drvdata(spi, NULL);
     fp_dev->spi = NULL;
     kfree(fp_dev);
     fp_dev = NULL;
@@ -1373,9 +1530,9 @@ err_devt:
     return status;
 }
 
-static void silfp_remove(struct spi_device *spi)
+static int silfp_remove(struct platform_device *spi)
 {
-    struct silfp_data	*fp_dev = spi_get_drvdata(spi);
+    struct silfp_data *fp_dev = platform_get_drvdata(spi);
 
     wake_lock_destroy(&fp_dev->wakelock);
     wake_lock_destroy(&fp_dev->wakelock_hal);
@@ -1393,25 +1550,28 @@ static void silfp_remove(struct spi_device *spi)
     if (fp_dev->users == 0)
         kfree(fp_dev);
     mutex_unlock(&device_list_lock);
+
+    remove_proc_entry(PROC_NAME, NULL);
+    return 0;
 }
 
 static const struct of_device_id sildev_dt_ids[] = {
-    { .compatible = "sil,silead_fp" },
-    { .compatible = "sil,silead-fp" },
-    { .compatible = "sil,fingerprint" },
-    { .compatible = "sil,silead_fp-pins" },
+    {.compatible = "sil,silead_fp"},
+    {.compatible = "sil,silead-fp"},
+    {.compatible = "sil,fingerprint"},
+    //{ .compatible = "sil,silead_fp-pins" },
     {},
 };
 
 MODULE_DEVICE_TABLE(of, sildev_dt_ids);
 
-static struct spi_driver silfp_driver = {
+static struct platform_driver silfp_driver = {
     .driver = {
-        .name  = "silead-fp",
+        .name = "silead_fp_platform",
         .owner = THIS_MODULE,
         .of_match_table = of_match_ptr(sildev_dt_ids),
     },
-    .probe  = silfp_probe,
+    .probe = silfp_probe,
     .remove = silfp_remove,
 
     /* NOTE:  suspend/resume methods are not necessary here.
@@ -1425,11 +1585,21 @@ static struct spi_driver silfp_driver = {
 #ifndef BSP_SIL_DYNAMIC_SPI
 static
 #endif
-int silfp_dev_init(void)
+    int __init
+    silfp_dev_init(void)
 {
     int status = 0;
 
     LOG_MSG_DEBUG(ERR_LOG, "SILEAD_FP Driver, Version: %s.\n", FP_DEV_VERSION);
+
+    if (fpc1022_fp_exist) {
+        LOG_MSG_DEBUG(ERR_LOG, "[%s] FPC sensor has been detected, so exit silead sensor detect.\n", __func__);
+        return -EINVAL;
+    }
+    if (goodix_fp_exist) {
+        LOG_MSG_DEBUG(ERR_LOG, "[%s] GOODIX sensor has been detected, so exit silead sensor detect.\n", __func__);
+        return -EINVAL;
+    }
     /* Claim our 256 reserved device numbers.  Then register a class
      * that will key udev/mdev to add/remove /dev nodes.  Last, register
      * the driver which manages those device numbers.
@@ -1438,6 +1608,9 @@ int silfp_dev_init(void)
     if (status < 0) {
         return status;
     }
+    if (spi_fingerprint == NULL) {
+        LOG_MSG_DEBUG(ERR_LOG, "[%s] spi_fingerprint=NULL.\n", __func__);
+    }
 
     silfp_class = class_create("silead_fp");
     if (IS_ERR(silfp_class)) {
@@ -1445,7 +1618,7 @@ int silfp_dev_init(void)
         return PTR_ERR(silfp_class);
     }
 
-    status = spi_register_driver(&silfp_driver);
+    status = platform_driver_register(&silfp_driver);
     if (status < 0) {
         class_destroy(silfp_class);
         unregister_chrdev(FP_DEV_MAJOR, silfp_driver.driver.name);
@@ -1453,19 +1626,21 @@ int silfp_dev_init(void)
         return status;
     }
     silfp_wq = create_singlethread_workqueue("silfp_wq");
+
+    silfp_dev.spi1 = spi_fingerprint;
     return status;
 }
 
 #ifndef BSP_SIL_DYNAMIC_SPI
 static
 #endif
-void silfp_dev_exit(void)
+    void __exit
+    silfp_dev_exit(void)
 {
-    spi_unregister_driver(&silfp_driver);
+    platform_driver_unregister(&silfp_driver);
     class_destroy(silfp_class);
     unregister_chrdev(FP_DEV_MAJOR, silfp_driver.driver.name);
 }
-EXPORT_SYMBOL(sil_debug_level);
 
 #ifdef BSP_SIL_DYNAMIC_SPI
 EXPORT_SYMBOL(silfp_dev_init);
@@ -1473,8 +1648,9 @@ EXPORT_SYMBOL(silfp_dev_exit);
 EXPORT_SYMBOL(sil_debug_level);
 #else
 module_exit(silfp_dev_exit);
+// module_init(silfp_dev_init);
 late_initcall(silfp_dev_init);
-
+MODULE_SOFTDEP("pre:gf_fingerprint");
 MODULE_AUTHOR("Bill Yu <billyu@silead.com>");
 MODULE_DESCRIPTION("Gigadevice/Silead Fingerprint driver for GSL6xxx/GSL7xxx/GSL8xxx series.");
 MODULE_LICENSE("GPL");

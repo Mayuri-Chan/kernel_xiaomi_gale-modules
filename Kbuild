@@ -112,4 +112,6 @@ obj-y += drivers/pci/controller/
 
 obj-y += drivers/video/backlight/
 
+obj-y += drivers/input/fingerprint/
+
 endif
