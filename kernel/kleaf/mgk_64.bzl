@@ -13,7 +13,7 @@ mgk_64_defconfig = "mgk_64_k66_defconfig"
 
 mgk_64_kleaf_modules = [
     # keep sorted
-    "//vendor/mediatek/kernel_modules/connectivity/bt/linux_v2:btmtk_uart_unify",
+    #"//vendor/mediatek/kernel_modules/connectivity/bt/linux_v2:btmtk_uart_unify",
     "//vendor/mediatek/kernel_modules/connectivity/bt/mt66xx:btif",
     "//vendor/mediatek/kernel_modules/connectivity/bt/mt66xx/wmt:wmt",
     #"//vendor/mediatek/kernel_modules/connectivity/bt/mt76xx/sdio:btmtksdio",
@@ -22,62 +22,62 @@ mgk_64_kleaf_modules = [
     "//vendor/mediatek/kernel_modules/connectivity/conninfra:conninfra",
     "//vendor/mediatek/kernel_modules/connectivity/fmradio:fmradio",
     "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v010:gps_drv_dl_v010",
-    "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v030:gps_drv_dl_v030",
-    "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v050:gps_drv_dl_v050",
-    "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v051:gps_drv_dl_v051",
-    "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v060:gps_drv_dl_v060",
-    "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v061:gps_drv_dl_v061",
-    "//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v062:gps_drv_dl_v062",
+    #"//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v030:gps_drv_dl_v030",
+    #"//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v050:gps_drv_dl_v050",
+    #"//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v051:gps_drv_dl_v051",
+    #"//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v060:gps_drv_dl_v060",
+    #"//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v061:gps_drv_dl_v061",
+    #"//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v062:gps_drv_dl_v062",
     "//vendor/mediatek/kernel_modules/connectivity/gps/gps_pwr:gps_pwr",
     "//vendor/mediatek/kernel_modules/connectivity/gps/gps_scp:gps_scp",
     "//vendor/mediatek/kernel_modules/connectivity/gps/gps_stp:gps_drv_stp",
     "//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac1x:wmt_chrdev_wifi",
     "//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac2x:wmt_chrdev_wifi_connac2",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac3x:wmt_chrdev_wifi_connac3",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac3x:wmt_chrdev_wifi_connac3",
     "//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/wlan_page_pool:wlan_page_pool",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen3/build/6771:wlan_drv_gen3",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6897:wlan_drv_gen4m_6897",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6899:wlan_drv_gen4m_6899",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6985_6639:wlan_drv_gen4m_6985_6639",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639:wlan_drv_gen4m_6989_6639",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639_dppm:wlan_drv_gen4m_6989_6639_dppm",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653:wlan_drv_gen4m_6991_6653",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_2g2a:wlan_drv_gen4m_6991_6653_2g2a",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_triband:wlan_drv_gen4m_6991_6653_triband",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/eap_6653:wlan_drv_gen4m_eap_6653",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6639_tc10sp:wlan_drv_gen4m_6991_6639_tc10sp",
-    "//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6639_new9gen2:wlan_drv_gen4m_6991_6639_new9gen2",
-    "//vendor/mediatek/kernel_modules/cpufreq_cus:cpu_freq",
-    "//vendor/mediatek/kernel_modules/cpufreq_int:cpu_hwtest",
-    "//vendor/mediatek/kernel_modules/fpsgo_cus:fpsgo_cus",
-    "//vendor/mediatek/kernel_modules/fpsgo_int:fpsgo_int",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen3/build/6771:wlan_drv_gen3",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6897:wlan_drv_gen4m_6897",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6899:wlan_drv_gen4m_6899",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6985_6639:wlan_drv_gen4m_6985_6639",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639:wlan_drv_gen4m_6989_6639",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639_dppm:wlan_drv_gen4m_6989_6639_dppm",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653:wlan_drv_gen4m_6991_6653",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_2g2a:wlan_drv_gen4m_6991_6653_2g2a",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_triband:wlan_drv_gen4m_6991_6653_triband",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/eap_6653:wlan_drv_gen4m_eap_6653",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6639_tc10sp:wlan_drv_gen4m_6991_6639_tc10sp",
+    #"//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6639_new9gen2:wlan_drv_gen4m_6991_6639_new9gen2",
+    #"//vendor/mediatek/kernel_modules/cpufreq_cus:cpu_freq",
+    #"//vendor/mediatek/kernel_modules/cpufreq_int:cpu_hwtest",
+    #"//vendor/mediatek/kernel_modules/fpsgo_cus:fpsgo_cus",
+    #"//vendor/mediatek/kernel_modules/fpsgo_int:fpsgo_int",
     "//vendor/mediatek/kernel_modules/afs_common_utils:jank_detection_common_utils",
-    "//vendor/mediatek/kernel_modules/afs_core_int:jank_detection_core_int",
+    #"//vendor/mediatek/kernel_modules/afs_core_int:jank_detection_core_int",
     "//vendor/mediatek/kernel_modules/afs_core_cus:jank_detection_core_cus",
     "//vendor/mediatek/kernel_modules/gpu:gpu",
     "//vendor/mediatek/kernel_modules/hbt_driver_cus:hbt_cus",
     "//vendor/mediatek/kernel_modules/hbt_driver:hbt_int",
-    "//vendor/mediatek/kernel_modules/met_drv_secure_v3:met_drv_secure_v3",
-    "//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_cus",
-    "//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_int",
-    "//vendor/mediatek/kernel_modules/met_drv_v3:met_drv_v3",
+    #"//vendor/mediatek/kernel_modules/met_drv_secure_v3:met_drv_secure_v3",
+    #"//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_cus",
+    #"//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_int",
+    #"//vendor/mediatek/kernel_modules/met_drv_v3:met_drv_v3",
     #"//vendor/mediatek/kernel_modules/msync2_frd_cus/build:msync2_frd_cus",
     #"//vendor/mediatek/kernel_modules/msync2_frd_int:msync2_frd_int",
-    "//vendor/mediatek/kernel_modules/mtk_input/FT3518U:ft3518u",
-    "//vendor/mediatek/kernel_modules/mtk_input/FT3518:ft3518",
-    "//vendor/mediatek/kernel_modules/mtk_input/FT3683G:ft3683g",
+    #"//vendor/mediatek/kernel_modules/mtk_input/FT3518U:ft3518u",
+    #"//vendor/mediatek/kernel_modules/mtk_input/FT3518:ft3518",
+    #"//vendor/mediatek/kernel_modules/mtk_input/FT3683G:ft3683g",
     #"//vendor/mediatek/kernel_modules/mtk_input/GT9886:gt9886",
-    "//vendor/mediatek/kernel_modules/mtk_input/GT9916:gt9916",
-    "//vendor/mediatek/kernel_modules/mtk_input/NT36672C:nt36672c",
-    "//vendor/mediatek/kernel_modules/mtk_input/NT36672C_144HZ:nt36672c_144hz",
-    "//vendor/mediatek/kernel_modules/mtk_input/NT36672C_120HZ:nt36672c_120hz",
-    "//vendor/mediatek/kernel_modules/mtk_input/nt36xxx_no_flash_spi:nt36xxx_no_flash_spi",
-    "//vendor/mediatek/kernel_modules/mtk_input/hxchipset_hx83102p:hxchipset_hx83102p",
-    "//vendor/mediatek/kernel_modules/mtk_input/TD4320:td4320",
-    "//vendor/mediatek/kernel_modules/mtk_input/ST61Y:st61y",
-    "//vendor/mediatek/kernel_modules/mtk_input/fingerprint/goodix/4.14:gf_spi_414",
-    "//vendor/mediatek/kernel_modules/mtk_input/fingerprint/goodix/5.10:gf_spi",
-    "//vendor/mediatek/kernel_modules/mtk_input/synaptics_tcm:synaptics_tcm",
+    #"//vendor/mediatek/kernel_modules/mtk_input/GT9916:gt9916",
+    #"//vendor/mediatek/kernel_modules/mtk_input/NT36672C:nt36672c",
+    #"//vendor/mediatek/kernel_modules/mtk_input/NT36672C_144HZ:nt36672c_144hz",
+    #"//vendor/mediatek/kernel_modules/mtk_input/NT36672C_120HZ:nt36672c_120hz",
+    #"//vendor/mediatek/kernel_modules/mtk_input/nt36xxx_no_flash_spi:nt36xxx_no_flash_spi",
+    #"//vendor/mediatek/kernel_modules/mtk_input/hxchipset_hx83102p:hxchipset_hx83102p",
+    #"//vendor/mediatek/kernel_modules/mtk_input/TD4320:td4320",
+    #"//vendor/mediatek/kernel_modules/mtk_input/ST61Y:st61y",
+    #"//vendor/mediatek/kernel_modules/mtk_input/fingerprint/goodix/4.14:gf_spi_414",
+    #"//vendor/mediatek/kernel_modules/mtk_input/fingerprint/goodix/5.10:gf_spi",
+    #"//vendor/mediatek/kernel_modules/mtk_input/synaptics_tcm:synaptics_tcm",
     "//vendor/mediatek/kernel_modules/mtkcam/camsys:camsys",
     "//vendor/mediatek/kernel_modules/mtkcam/cam_cal/src_v4l2/custom:mtk_cam_cal",
     "//vendor/mediatek/kernel_modules/mtkcam/ccusys:ccusys",
@@ -100,12 +100,12 @@ mgk_64_kleaf_modules = [
     "//vendor/mediatek/kernel_modules/mtkcam/scpsys/mtk-aov:mtk_aov",
     "//vendor/mediatek/kernel_modules/mtkcam/isp_pspm:isp_pspm",
     "//vendor/mediatek/kernel_modules/sched_cus:sched_cus",
-    "//vendor/mediatek/kernel_modules/sched_int:sched_int",
+    #"//vendor/mediatek/kernel_modules/sched_int:sched_int",
     "//vendor/mediatek/kernel_modules/mtkcam/img_frm_sync:mtk-img-frm-sync",
     "//vendor/mediatek/kernel_modules/task_turbo_cus:task_turbo_cus",
-    "//vendor/mediatek/kernel_modules/task_turbo_int:task_turbo_int",
-    "//vendor/mediatek/kernel_modules/game_cus:game_cus",
-    "//vendor/mediatek/kernel_modules/game_int:game_int",
+    #"//vendor/mediatek/kernel_modules/task_turbo_int:task_turbo_int",
+    #"//vendor/mediatek/kernel_modules/game_cus:game_cus",
+    #"//vendor/mediatek/kernel_modules/game_int:game_int",
 ]
 
 mgk_64_kleaf_eng_modules = [
@@ -1127,12 +1127,12 @@ def get_overlay_modules_list():
         mgk_64_device_modules.append("drivers/misc/mediatek/flashlight/flashlights-sywt78.ko")
 
     if "fpga.config" in DEFCONFIG_OVERLAYS:
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_cus:fpsgo_cus")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_int:fpsgo_int")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_secure_v3:met_drv_secure_v3")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_cus")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_int")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3:met_drv_v3")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_cus:fpsgo_cus")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_int:fpsgo_int")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_secure_v3:met_drv_secure_v3")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_cus")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_int")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3:met_drv_v3")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/msync2_frd_cus/build:msync2_frd_cus")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/msync2_frd_int:msync2_frd_int")
         mgk_64_kleaf_eng_modules.remove("//vendor/mediatek/tests/kernel/ktf_testcase:ktf_testcase")
@@ -2363,8 +2363,8 @@ def get_overlay_modules_list():
         mgk_64_device_modules.remove("drivers/media/platform/mtk-vcu/mtk-vcu.ko")
         mgk_64_device_modules.remove("drivers/soc/mediatek/mtk-mmdvfs-v3.ko")
         mgk_64_device_modules.remove("drivers/misc/mediatek/qos/mtk_qos.ko")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_cus:cpu_freq")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_int:cpu_hwtest")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_cus:cpu_freq")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_int:cpu_hwtest")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/mtkcam/scpsys/mtk-aov:mtk_aov")
         mgk_64_platform_device_modules.pop("drivers/clk/mediatek/clk-chk-mt6989.ko")
         mgk_64_platform_device_modules.pop("drivers/clk/mediatek/pd-chk-mt6989.ko")
@@ -2832,10 +2832,10 @@ def get_overlay_modules_list():
         mgk_64_device_modules.append("drivers/memory/mediatek/emi_legacy/emi_legacy_v1/emictrl.ko")
         mgk_64_device_modules.append("drivers/memory/mediatek/emi_legacy/emi-dummy.ko")
 
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_secure_v3:met_drv_secure_v3")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_cus")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_int")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3:met_drv_v3")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_secure_v3:met_drv_secure_v3")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_cus")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3/met_api:met_api_v3_int")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/met_drv_v3:met_drv_v3")
 
         mgk_64_device_modules.remove("drivers/misc/mediatek/sspm/v3/sspm_v3.ko")
         mgk_64_device_modules.remove("drivers/misc/mediatek/tinysys_scmi/tinysys-scmi.ko")
@@ -3525,8 +3525,8 @@ def get_overlay_modules_list():
         mgk_64_device_modules.append("drivers/misc/mediatek/cameraisp/dpe/camera_dpe_isp40.ko")
 
         mgk_64_device_modules.remove("drivers/misc/mediatek/mcupm/v2/mcupm.ko")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_cus:cpu_freq")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_int:cpu_hwtest")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_cus:cpu_freq")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/cpufreq_int:cpu_hwtest")
         mgk_64_device_modules.append("drivers/misc/mediatek/dcm/mt6765_dcm.ko")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/gpu:gpu")
         mgk_64_kleaf_modules.append("//vendor/mediatek/kernel_modules/gpu:gpu_mt6765")
@@ -4511,27 +4511,27 @@ def get_overlay_modules_list():
         mgk_64_kleaf_modules.append("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4-mt79xx:wlan_mt7961")
         mgk_64_kleaf_modules.append("//vendor/mediatek/kernel_modules/connectivity/bt/linux_v2_ce:btmtk_uart_unify_ce")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v010:gps_drv_dl_v010")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v030:gps_drv_dl_v030")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v050:gps_drv_dl_v050")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v051:gps_drv_dl_v051")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v060:gps_drv_dl_v060")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v061:gps_drv_dl_v061")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v062:gps_drv_dl_v062")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v030:gps_drv_dl_v030")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v050:gps_drv_dl_v050")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v051:gps_drv_dl_v051")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v060:gps_drv_dl_v060")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v061:gps_drv_dl_v061")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/data_link/plat/v062:gps_drv_dl_v062")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/gps_pwr:gps_pwr")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/gps_scp:gps_scp")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/gps/gps_stp:gps_drv_stp")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac1x:wmt_chrdev_wifi")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac2x:wmt_chrdev_wifi_connac2")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac3x:wmt_chrdev_wifi_connac3")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/build/connac3x:wmt_chrdev_wifi_connac3")
         mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/adaptor/wlan_page_pool:wlan_page_pool")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6897:wlan_drv_gen4m_6897")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6899:wlan_drv_gen4m_6899")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6985_6639:wlan_drv_gen4m_6985_6639")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639:wlan_drv_gen4m_6989_6639")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639_dppm:wlan_drv_gen4m_6989_6639_dppm")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653:wlan_drv_gen4m_6991_6653")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_2g2a:wlan_drv_gen4m_6991_6653_2g2a")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_triband:wlan_drv_gen4m_6991_6653_triband")
-        mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/eap_6653:wlan_drv_gen4m_eap_6653")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6897:wlan_drv_gen4m_6897")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac2x/6899:wlan_drv_gen4m_6899")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6985_6639:wlan_drv_gen4m_6985_6639")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639:wlan_drv_gen4m_6989_6639")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6989_6639_dppm:wlan_drv_gen4m_6989_6639_dppm")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653:wlan_drv_gen4m_6991_6653")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_2g2a:wlan_drv_gen4m_6991_6653_2g2a")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/6991_6653_triband:wlan_drv_gen4m_6991_6653_triband")
+        #mgk_64_kleaf_modules.remove("//vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m/build/connac3x/eap_6653:wlan_drv_gen4m_eap_6653")
 
 get_overlay_modules_list()
