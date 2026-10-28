@@ -435,6 +435,7 @@ err:
 	pr_err("%s: probing not successful, check hardware\n", __func__);
 	return ret;
 }
+EXPORT_SYMBOL(nfc_i2c_dev_probe);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
 void nfc_i2c_dev_remove(struct i2c_client *client)
@@ -471,6 +472,7 @@ int nfc_i2c_dev_remove(struct i2c_client *client)
 	return 0;
 #endif
 }
+EXPORT_SYMBOL(nfc_i2c_dev_remove);
 
 int nfc_i2c_dev_suspend(struct device *device)
 {
@@ -490,6 +492,8 @@ int nfc_i2c_dev_suspend(struct device *device)
 	pr_debug("%s: irq_wake_up = %d", __func__, i2c_dev->irq_wake_up);
 	return 0;
 }
+EXPORT_SYMBOL(nfc_i2c_dev_suspend);
+
 int nfc_i2c_dev_resume(struct device *device)
 {
 	struct i2c_client *client = to_i2c_client(device);
@@ -508,6 +512,7 @@ int nfc_i2c_dev_resume(struct device *device)
 	pr_debug("%s: irq_wake_up = %d", __func__, i2c_dev->irq_wake_up);
 	return 0;
 }
+EXPORT_SYMBOL(nfc_i2c_dev_resume);
 
 static const struct i2c_device_id nfc_i2c_dev_id[] = { { NFC_I2C_DEV_ID, 0 },
 						       {} };
