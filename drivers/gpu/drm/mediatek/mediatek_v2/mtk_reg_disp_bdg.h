@@ -1145,6 +1145,10 @@ struct MIPI_TX_PLL_CON0_REG {
 	unsigned RG_DSI_PLL_SDM_PCW : 32;
 };
 
+#undef RG_DSI_PLL_LVROD_EN
+#undef RG_DSI_PLL_RST_DLY
+#undef RG_DSI_PLL_ICHP
+
 struct MIPI_TX_PLL_CON1_REG {
 	unsigned BDG_RG_DSI_PLL_SDM_PCW_CHG : 1;
 	unsigned RSV_01 : 3;

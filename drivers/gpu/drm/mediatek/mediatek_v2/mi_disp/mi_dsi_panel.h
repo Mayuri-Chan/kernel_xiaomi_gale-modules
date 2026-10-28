@@ -39,7 +39,7 @@
 #endif
 
 #include "../mtk_drm_helper.h"
-#include "../mtk_mipi_tx.h"
+//#include "../mtk_mipi_tx.h"
 #include "../mtk_dump.h"
 #include "../mtk_log.h"
 #include "../mtk_drm_lowpower.h"
