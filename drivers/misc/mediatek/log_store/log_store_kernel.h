@@ -9,7 +9,15 @@
 #include <linux/types.h>
 
 
+#if IS_ENABLED(CONFIG_MACH_GALE)
+#define SRAM_HEADER_SIG (0xabcd1234)
+typedef u32 log_store_addr_t;
+#define LOG_STORE_SRAM_RESERVE_COUNT 41
+#else
 #define SRAM_HEADER_SIG (0x24013186)
+typedef u64 log_store_addr_t;
+#define LOG_STORE_SRAM_RESERVE_COUNT 37
+#endif
 #define DRAM_HEADER_SIG (0x5678ef90)
 #define LOG_STORE_SIG (0xcdab3412)
 #define LOG_EMMC_SIG (0x785690ef)
@@ -64,13 +72,13 @@ struct pl_lk_log {
 struct dram_buf_header {
 	u32 sig;
 	u32 flag;
-	u64 buf_addr;
+	log_store_addr_t buf_addr;
 	u32 buf_size;
 	u32 buf_offsize;
 	u32 buf_point;
-	u64 klog_addr;
+	log_store_addr_t klog_addr;
 	u32 klog_size;
-	u64 atf_log_addr;
+	log_store_addr_t atf_log_addr;
 	u32 atf_log_len;
 } __packed;
 
@@ -81,9 +89,9 @@ struct sram_log_header {
 	u32 save_to_emmc;
 	struct dram_buf_header dram_buf;        // 52 bytes
 	struct pl_lk_log dram_curlog_header;    // 32 bytes
-	u64 gz_log_addr;
+	log_store_addr_t gz_log_addr;
 	u32 gz_log_len;
-	u32 reserve[37];                        // reserve 37 * 4 char size(148 bytes)
+	u32 reserve[LOG_STORE_SRAM_RESERVE_COUNT];
 	/* reserve[0] sram_log record log size */
 	/* reserve[1] save block size for kernel use*/
 	/* reserve[2] pmic save boot phase enable/disable */

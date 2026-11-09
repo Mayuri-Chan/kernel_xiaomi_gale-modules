@@ -21,3 +21,7 @@ config MTK_VCODEC_DEBUG
 	  Set Y to enable this feature.
 	  Set N to disable this feature.
 	  If unsure, Set N to disable it.
+
+config MTK_VCODEC_VCU_LEGACY_QP
+	bool "Use the legacy VCU encoder quantizer layout"
+	depends on VIDEO_MEDIATEK_VCU && !MTK_TINYSYS_VCP_SUPPORT

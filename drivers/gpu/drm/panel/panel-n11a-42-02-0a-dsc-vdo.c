@@ -1014,7 +1014,7 @@ static int mode_switch(struct drm_panel *panel,
 	// return count;
 // }
 
-#ifdef CONFIG_MI_DISP
+#if 0 // CONFIG_MI_DISP
 static void lcm_esd_restore_backlight(struct drm_panel *panel)
 {
 	char bl_tb0[] = {0x51, 0x00, 0x00};
@@ -1216,7 +1216,7 @@ static struct mtk_panel_funcs ext_funcs = {
 	.mode_switch = mode_switch,
 	//.set_doze_brightness = panel_set_doze_brightness,
 	//.get_doze_brightness = panel_get_doze_brightness,
-#ifdef CONFIG_MI_DISP
+#if 0 // CONFIG_MI_DISP
 	.esd_restore_backlight = lcm_esd_restore_backlight,
 	.setbacklight_control = lcm_setbacklight_control,
 	.get_wp_info = panel_get_wp_info,

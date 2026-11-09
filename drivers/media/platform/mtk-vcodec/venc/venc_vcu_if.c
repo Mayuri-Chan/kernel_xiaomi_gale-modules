@@ -605,16 +605,26 @@ int vcu_enc_set_param(struct venc_vcu_inst *vcu,
 		out.data[0] = enc_param->highquality;
 		break;
 	case VENC_SET_PARAM_ADJUST_MAX_QP:
+#if IS_ENABLED(CONFIG_MTK_VCODEC_VCU_LEGACY_QP)
+		out.data_item = 1;
+		out.data[0] = enc_param->i_max_qp;
+#else
 		out.data_item = 3;
 		out.data[0] = enc_param->i_max_qp;
 		out.data[1] = enc_param->p_max_qp;
 		out.data[2] = enc_param->b_max_qp;
+#endif
 		break;
 	case VENC_SET_PARAM_ADJUST_MIN_QP:
+#if IS_ENABLED(CONFIG_MTK_VCODEC_VCU_LEGACY_QP)
+		out.data_item = 1;
+		out.data[0] = enc_param->i_min_qp;
+#else
 		out.data_item = 3;
 		out.data[0] = enc_param->i_min_qp;
 		out.data[1] = enc_param->p_min_qp;
 		out.data[2] = enc_param->b_min_qp;
+#endif
 		break;
 	case VENC_SET_PARAM_ADJUST_I_P_QP_DELTA:
 		out.data_item = 1;

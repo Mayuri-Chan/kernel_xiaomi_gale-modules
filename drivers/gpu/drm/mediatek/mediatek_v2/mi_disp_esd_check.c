@@ -20,7 +20,7 @@
 //#include <drm/drmP.h>
 //#include <linux/soc/mediatek/mtk-cmdq.h>
 
-#include <linux/irqdesc.h>
+#include <linux/irq.h>
 #include "mtk_drm_drv.h"
 #include "mtk_drm_ddp_comp.h"
 #include "mtk_drm_crtc.h"
@@ -86,7 +86,7 @@ exit:
 
 extern void set_panel_dead_flag(int value);
 
-static int mtk_drm_esd_recover(struct drm_crtc *crtc)
+static int mi_disp_esd_recover(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_drm_private *priv = mtk_crtc->base.dev->dev_private;
@@ -139,7 +139,7 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 
 	mdelay(150);
 
-	mtk_drm_crtc_enable(crtc);
+	mtk_drm_crtc_enable(crtc, true);
 	mtk_crtc->qos_ctx->last_hrt_req = last_hrt_req;
 
 	CRTC_MMP_MARK(drm_crtc_index(crtc), esd_recovery, 0, 3);
@@ -344,7 +344,7 @@ static int mi_esd_err_flag_irq_check_worker_kthread(void *data)
 		//panel_dead = 1;
 		//mi_disp_feature_event_notify(&event, &panel_dead);
 
-		mtk_drm_esd_recover(crtc);
+		mi_disp_esd_recover(crtc);
 
 		//panel_dead = 0;
 		//mi_disp_feature_event_notify(&event, &panel_dead);
@@ -388,7 +388,7 @@ static int mi_esd_err_flag_irq_check_worker_kthread(void *data)
 			//panel_dead = 1;
 			//mi_disp_feature_event_notify(&event, &panel_dead);
 
-			mtk_drm_esd_recover(crtc);
+			mi_disp_esd_recover(crtc);
 
 			//panel_dead = 0;
 			//mi_disp_feature_event_notify(&event, &panel_dead);
@@ -494,15 +494,16 @@ void mi_disp_err_enable_esd_irq(struct drm_crtc *crtc)
 int mi_disp_esd_irq_ctrl(struct mi_esd_ctx *mi_esd_ctx,
 		bool enable)
 {
-	struct irq_desc *desc;
+	struct irq_data *irq_data;
 	if (gpio_is_valid(mi_esd_ctx->err_flag_irq_gpio)) {
 		if (mi_esd_ctx->err_flag_irq) {
 			if (enable) {
 				if (!mi_esd_ctx->err_flag_enabled) {
-					desc = irq_to_desc(mi_esd_ctx->err_flag_irq);
-					if (!irqd_is_level_type(&desc->irq_data)) {
+					irq_data = irq_get_irq_data(mi_esd_ctx->err_flag_irq);
+					if (irq_data && !irqd_is_level_type(irq_data)) {
 						pr_info("clear pending esd irq\n");
-						desc->istate &= ~IRQS_PENDING;
+						irq_set_irqchip_state(mi_esd_ctx->err_flag_irq,
+								     IRQCHIP_STATE_PENDING, false);
 					}
 					enable_irq_wake(mi_esd_ctx->err_flag_irq);
 					enable_irq(mi_esd_ctx->err_flag_irq);

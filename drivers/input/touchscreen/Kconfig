@@ -5,6 +5,8 @@
 
 if INPUT_TOUCHSCREEN
 
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/nt36528_spi/Kconfig"
+
 config TOUCHSCREEN_MTK_TOUCH
        string "Touch IC name for Mediatek package"
        help

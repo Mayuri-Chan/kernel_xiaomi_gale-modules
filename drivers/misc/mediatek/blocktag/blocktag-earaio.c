@@ -21,8 +21,6 @@
 #include "blocktag-internal.h"
 #include "blocktag-fuse-trace.h"
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-
 #define EARA_IOCTL_MAX_SIZE 27
 struct _EARA_IOCTL_PACKAGE {
 	union {
@@ -307,7 +305,7 @@ static void mtk_btag_eara_transfer_data(__s32 *data, __s32 input_size)
 	mtk_btag_eara_get_data(&eara_io_data);
 	mutex_unlock(&eara_ioctl_lock);
 
-	limit_size = MIN(input_size, sizeof(struct eara_iostat));
+	limit_size = min_t(size_t, input_size, sizeof(struct eara_iostat));
 	memcpy(data, &eara_io_data, limit_size);
 }
 

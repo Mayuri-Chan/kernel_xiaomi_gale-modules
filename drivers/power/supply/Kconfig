@@ -1,4 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
+config CHARGER_SC8989X
+	tristate "Southchip SC8989x charger"
+	depends on MACH_GALE && I2C && OF && GPIOLIB
+	depends on MTK_CHARGER && USB_MTK_HDRC
+	select REGMAP_I2C
+
 config MTK_CHARGER
 	tristate "MediaTek Charging Driver"
 	depends on MTK_USB_TYPEC

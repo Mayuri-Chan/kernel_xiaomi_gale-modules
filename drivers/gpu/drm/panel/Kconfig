@@ -1,5 +1,42 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
+config DRM_PANEL_C3UV_BIAS
+	tristate
+	depends on MACH_GALE && I2C
+	select REGMAP_I2C
+
+config DRM_PANEL_C3UV_43_02_0A_VDO
+	tristate "Gale C3UV 43 02 0A VDO panel"
+	depends on MACH_GALE
+	depends on OF && GPIOLIB && I2C && DRM_MIPI_DSI
+	depends on DRM_MEDIATEK_V2
+	depends on BACKLIGHT_CLASS_DEVICE
+	select DRM_PANEL_C3UV_BIAS
+
+config DRM_PANEL_C3UV_35_03_0B_VDO
+	tristate "Gale C3UV 35 03 0B VDO panel"
+	depends on MACH_GALE
+	depends on OF && GPIOLIB && I2C && DRM_MIPI_DSI
+	depends on DRM_MEDIATEK_V2
+	depends on BACKLIGHT_CLASS_DEVICE
+	select DRM_PANEL_C3UV_BIAS
+
+config DRM_PANEL_C3UV_46_0F_0C_VDO
+	tristate "Gale C3UV 46 0F 0C VDO panel"
+	depends on MACH_GALE
+	depends on OF && GPIOLIB && I2C && DRM_MIPI_DSI
+	depends on DRM_MEDIATEK_V2
+	depends on BACKLIGHT_CLASS_DEVICE
+	select DRM_PANEL_C3UV_BIAS
+
+config DRM_PANEL_C3UV_42_0F_0D_VDO
+	tristate "Gale C3UV 42 0F 0D VDO panel"
+	depends on MACH_GALE
+	depends on OF && GPIOLIB && I2C && DRM_MIPI_DSI
+	depends on DRM_MEDIATEK_V2
+	depends on BACKLIGHT_CLASS_DEVICE
+	select DRM_PANEL_C3UV_BIAS
+
 config DRM_PANEL_BOE_TS127QFMLL1DKP0
 	tristate "BOE wqxga2944 vdo mode panel"
 	depends on OF

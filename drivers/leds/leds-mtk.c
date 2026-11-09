@@ -39,7 +39,7 @@ static BLOCKING_NOTIFIER_HEAD(mtk_leds_chain_head);
 
 struct mt_leds_desp_info *leds_info;
 
-#if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING)
+#if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING) && !IS_ENABLED(CONFIG_MACH_GALE)
 static int led_bat_per_pt[MAX_BL_PT_NUM];
 #endif
 
@@ -577,7 +577,7 @@ int setPTBrightness(int percent)
 	return 0;
 }
 
-#if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING)
+#if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING) && !IS_ENABLED(CONFIG_MACH_GALE)
 static void mt_leds_bat_low_cb(BATTERY_PERCENT_LEVEL level)
 {
 	int percent = 100;
@@ -659,7 +659,7 @@ int mt_leds_parse_dt(struct mt_led_data *mdev, struct fwnode_handle *fwnode)
 		mdev->conf.cdev.brightness = mdev->conf.cdev.max_brightness * 40 / 100;
 	}
 
-#if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING)
+#if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING) && !IS_ENABLED(CONFIG_MACH_GALE)
 	ret = fwnode_property_read_u32(fwnode, "reg-bat-percent-pt", &(mdev->conf.reg_battery_percent_pt));
 
 	if (ret) {

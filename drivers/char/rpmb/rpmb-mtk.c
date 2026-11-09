@@ -144,8 +144,6 @@ static struct nl_rpmb_send_req nl_rpmb_req;
 
 #define RPMB_NAME "rpmb"
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-
 
 enum ufs_ioctl {
 	RPMB_IOCTL_PROGRAM_KEY_REGION0 = 1,
@@ -2077,7 +2075,7 @@ int rpmb_req_ioctl_write_data_emmc(struct mmc_card *card,
 	 */
 
 	blkaddr = param->addr;
-	write_blks_one_time = MIN(MAX_RPMB_TRANSFER_BLK,
+	write_blks_one_time = min(MAX_RPMB_TRANSFER_BLK,
 			card->ext_csd.rel_sectors * 2);
 	while (left_blkcnt) {
 

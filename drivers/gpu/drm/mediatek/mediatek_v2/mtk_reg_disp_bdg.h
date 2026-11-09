@@ -1154,12 +1154,12 @@ struct MIPI_TX_PLL_CON1_REG {
 	unsigned RG_DSI_PLL_PREDIV : 2;
 	unsigned RG_DSI_PLL_SDM_FRA_EN : 1;
 	unsigned RG_DSI_PLL_SDM_HREN : 1;
-	unsigned RG_DSI_PLL_LVROD_EN : 1;
+	unsigned BDG_RG_DSI_PLL_LVROD_EN : 1;
 	unsigned RG_DSI_PLL_BP : 1;
 	unsigned RG_DSI_PLL_BR : 1;
 	unsigned RG_DSI_PLL_BLP : 1;
 	unsigned RSV_19 : 1;
-	unsigned RG_DSI_PLL_RST_DLY : 2;
+	unsigned BDG_RG_DSI_PLL_RST_DLY : 2;
 	unsigned RSV_22 : 10;
 };
 
@@ -1183,7 +1183,7 @@ struct MIPI_TX_PLL_CON4_REG {
 	unsigned RG_DSI_PLL_BW : 3;
 	unsigned RG_DSI_PLL_FS : 2;
 	unsigned RG_DSI_PLL_IBIAS : 2;
-	unsigned RG_DSI_PLL_ICHP : 2;
+	unsigned BDG_RG_DSI_PLL_ICHP : 2;
 	unsigned RSV_14 : 2;
 	unsigned RG_DSI_PLL_RESERVED : 16;
 };

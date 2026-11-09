@@ -187,7 +187,7 @@ static int mtk_usb_extcon_psy_init(struct mtk_extcon_info *extcon)
 		if (IS_ERR_OR_NULL(extcon->usb_psy)) {
 			dev_err(dev, "fail to get usb_psy\n");
 			extcon->usb_psy = NULL;
-			ret = -EINVAL;
+			ret = IS_ENABLED(CONFIG_MACH_GALE) ? -EPROBE_DEFER : -EINVAL;
 			goto fail;
 		}
 	}
@@ -738,6 +738,10 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 
 	/* power psy */
 	ret = mtk_usb_extcon_psy_init(extcon);
+	if (IS_ENABLED(CONFIG_MACH_GALE) && ret == -EPROBE_DEFER) {
+		destroy_workqueue(extcon->extcon_wq);
+		return dev_err_probe(dev, ret, "USB charger supply unavailable\n");
+	}
 	if (ret < 0)
 		dev_err(dev, "failed to init psy\n");
 

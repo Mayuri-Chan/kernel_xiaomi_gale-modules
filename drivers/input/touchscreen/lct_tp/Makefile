@@ -5,3 +5,4 @@ lct_tp-y += lct_tp_info.o \
             lct_tp_grip_area.o \
             lct_tp_gesture.o \
             lct_tp_proximity_switch.o
+lct_tp-$(CONFIG_MACH_GALE) += lct_tp_common.o

@@ -20,6 +20,11 @@
 #include "mtk_heap.h"
 #include "iommu_pseudo.h"
 
+#if IS_ENABLED(CONFIG_MTK_VCODEC_VCU_LEGACY_QP)
+static_assert(sizeof(struct venc_vcu_config) == 436);
+static_assert(offsetof(struct venc_vsi, venc.venc_bs_va) == 0xa78);
+#endif
+
 static unsigned int venc_h265_get_profile(struct venc_inst *inst,
 	unsigned int profile)
 {
@@ -487,12 +492,17 @@ static int venc_set_param(unsigned long handle,
 			inst->vsi->config.svp_is_hal_secure_handle = false;
 #endif
 		inst->vsi->config.highquality = enc_prm->highquality;
+#if IS_ENABLED(CONFIG_MTK_VCODEC_VCU_LEGACY_QP)
+		inst->vsi->config.max_qp = enc_prm->i_max_qp;
+		inst->vsi->config.min_qp = enc_prm->i_min_qp;
+#else
 		inst->vsi->config.i_max_qp = enc_prm->i_max_qp;
 		inst->vsi->config.i_min_qp = enc_prm->i_min_qp;
 		inst->vsi->config.p_max_qp = enc_prm->p_max_qp;
 		inst->vsi->config.p_min_qp = enc_prm->p_min_qp;
 		inst->vsi->config.b_max_qp = enc_prm->b_max_qp;
 		inst->vsi->config.b_min_qp = enc_prm->b_min_qp;
+#endif
 		inst->vsi->config.i_p_qp_delta = enc_prm->ip_qpdelta;
 		inst->vsi->config.qp_control_mode = enc_prm->qp_control_mode;
 		inst->vsi->config.frame_level_qp = enc_prm->framelvl_qp;

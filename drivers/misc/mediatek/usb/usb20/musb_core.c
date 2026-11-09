@@ -3116,6 +3116,9 @@ static void usb_spm_dpidle_request(int mode)
 static int usb_rdy;
 bool is_usb_rdy(void)
 {
+	if (!mtk_musb)
+		return false;
+
 	if (mtk_musb->is_ready) {
 		usb_rdy = 1;
 		DBG(0, "set usb_rdy, wake up bat\n");

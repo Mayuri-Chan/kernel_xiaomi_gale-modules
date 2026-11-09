@@ -1,0 +1,7 @@
+config TOUCHSCREEN_NT36528_SPI
+	tristate "Novatek NT36528 SPI touchscreen"
+	depends on MACH_GALE && SPI && I2C && OF && INPUT
+	depends on DRM_MEDIATEK_V2 && GPIOLIB && BACKLIGHT_CLASS_DEVICE
+	depends on POWER_SUPPLY
+	select TOUCHSCREEN_COMMON
+	select DRM_PANEL_C3UV_43_02_0A_VDO

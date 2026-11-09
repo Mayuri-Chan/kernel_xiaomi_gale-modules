@@ -700,6 +700,9 @@ void set_boot_phase(u32 step)
 	int ret = 0;
 #endif
 
+	if (!sram_header)
+		return;
+
 	if (sram_header->reserve[SRAM_PMIC_BOOT_PHASE] == FLAG_ENABLE) {
 		set_pmic_boot_phase(step);
 		if (last_boot_phase == 0)
@@ -946,24 +949,22 @@ static struct notifier_block logstore_reboot_notify = {
 	.notifier_call = logstore_reset,
 };
 
+static struct notifier_block logstore_pm_nb = {
+	.notifier_call = logstore_pm_notify,
+};
+static bool logstore_pm_registered;
+static bool logstore_reboot_registered;
+
 int log_store_late_init(void)
 {
-	static struct notifier_block logstore_pm_nb;
 	unsigned int boot_mode;
 
-	logstore_pm_nb.notifier_call = logstore_pm_notify;
-	if (register_pm_notifier(&logstore_pm_nb))
-		pr_warn("Failed to register PM notifier for logstore\n");
-
-	if (register_reboot_notifier(&logstore_reboot_notify))
-		pr_warn("Failed to register reboot notifier for logstore\n");
-
-	set_boot_phase(BOOT_PHASE_KERNEL);
-	if (sram_dram_buff == NULL) {
+	if (!sram_header || !sram_dram_buff) {
 		pr_notice("log_store: sram header DRAM buff is null.\n");
 		dram_log_store_status = BUFF_ALLOC_ERROR;
 		return -1;
 	}
+	set_boot_phase(BOOT_PHASE_KERNEL);
 
 	boot_mode = get_boot_mode_from_dts();
 
@@ -997,7 +998,7 @@ int log_store_late_init(void)
 		return -1;
 	}
 	pr_notice("log store:sram_dram_buff addr 0x%llx, size 0x%x.\n",
-		sram_dram_buff->buf_addr, sram_dram_buff->buf_size);
+		(unsigned long long)sram_dram_buff->buf_addr, sram_dram_buff->buf_size);
 
 	pbuff = remap_lowmem(sram_dram_buff->buf_addr,
 		sram_dram_buff->buf_size);
@@ -1033,6 +1034,8 @@ int log_store_late_init(void)
 		pr_notice("log_store: failed to create proc entry\n");
 		return 1;
 	}
+	logstore_pm_registered = !register_pm_notifier(&logstore_pm_nb);
+	logstore_reboot_registered = !register_reboot_notifier(&logstore_reboot_notify);
 
 	return 0;
 }
@@ -1137,9 +1140,13 @@ int log_store_sram_init(void)
 				sram_ls.addr, sram_ls.size);
 	else
 		pr_info("log_store: get fail\n");
+	if (!sram_ls.addr || sram_ls.size < sizeof(struct sram_log_header))
+		return -EINVAL;
 
 	sram_header = ioremap_wc(sram_ls.addr,
-		CONFIG_MTK_DRAM_LOG_STORE_SIZE);
+		sram_ls.size);
+	if (!sram_header)
+		return -ENOMEM;
 	dram_curlog_header = &(sram_header->dram_curlog_header);
 #else
 	pr_notice("log_store: not Found CONFIG_MTK_DRAM_LOG_STORE!\n");
@@ -1151,7 +1158,9 @@ int log_store_sram_init(void)
 		pr_notice("log_store: sram header sig 0x%x.\n",
 			sram_header->sig);
 		sram_log_store_status = BUFF_ERROR;
+		iounmap(sram_header);
 		sram_header = NULL;
+		dram_curlog_header = NULL;
 		return -1;
 	}
 
@@ -1159,13 +1168,16 @@ int log_store_sram_init(void)
 	if (sram_dram_buff->sig != DRAM_HEADER_SIG) {
 		pr_notice("log_store: sram header DRAM sig error");
 		sram_log_store_status = BUFF_ERROR;
+		iounmap(sram_header);
+		sram_header = NULL;
+		dram_curlog_header = NULL;
 		sram_dram_buff = NULL;
 		return -1;
 	}
 
 	pr_notice("sig 0x%x flag 0x%x add 0x%llx size 0x%x offsize 0x%x point 0x%x\n",
 		sram_dram_buff->sig, sram_dram_buff->flag,
-		sram_dram_buff->buf_addr, sram_dram_buff->buf_size,
+		(unsigned long long)sram_dram_buff->buf_addr, sram_dram_buff->buf_size,
 		sram_dram_buff->buf_offsize, sram_dram_buff->buf_point);
 	return 0;
 }
@@ -1175,8 +1187,11 @@ EXPORT_SYMBOL_GPL(log_store_sram_init);
 /* store log_store information to */
 static int __init log_store_early_init(void)
 {
+	int ret;
 
-	log_store_sram_init();
+	ret = log_store_sram_init();
+	if (ret)
+		return ret;
 #ifdef MODULE
 	log_store_late_init();
 #endif
@@ -1187,17 +1202,16 @@ static int __init log_store_early_init(void)
 #ifdef MODULE
 static void __exit log_store_exit(void)
 {
-	static struct notifier_block logstore_pm_nb;
-
 	if (entry)
 		proc_remove(entry);
 
 #if IS_ENABLED(CONFIG_MTK_LOG_STORE_BOOTPROF)
 	close_monitor_thread();
 #endif
-	logstore_pm_nb.notifier_call = logstore_pm_notify;
-	unregister_pm_notifier(&logstore_pm_nb);
-	unregister_reboot_notifier(&logstore_reboot_notify);
+	if (logstore_pm_registered)
+		unregister_pm_notifier(&logstore_pm_nb);
+	if (logstore_reboot_registered)
+		unregister_reboot_notifier(&logstore_reboot_notify);
 }
 
 module_init(log_store_early_init);

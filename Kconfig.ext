@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
 
+config MACH_GALE
+	bool "Xiaomi Gale"
+	depends on MTK_LEGACY_PLATFORM = "mt6768"
+
 config DEVICE_MODULES_ALLOW_BUILTIN
 	bool "allow builtin drivers into kernel image"
 	help

@@ -124,3 +124,10 @@ obj-$(CONFIG_DRM_MEDIATEK_PANEL) += mediatek-drm-panel-drv.o
 obj-$(CONFIG_DRM_MEDIATEK_PANEL) += mediatek-cust-panel-sample.o
 
 ccflags-$(CONFIG_DRM_MEDIATEK_PANEL) += -I$(DEVICE_MODULES_PATH)/drivers/leds/
+ifeq ($(CONFIG_MACH_GALE),y)
+obj-$(CONFIG_DRM_PANEL_C3UV_BIAS) += dsi_panel_c3uv_bias.o
+obj-$(CONFIG_DRM_PANEL_C3UV_43_02_0A_VDO) += dsi_panel_c3uv_43_02_0a_vdo.o
+obj-$(CONFIG_DRM_PANEL_C3UV_35_03_0B_VDO) += dsi_panel_c3uv_35_03_0b_vdo.o
+obj-$(CONFIG_DRM_PANEL_C3UV_46_0F_0C_VDO) += dsi_panel_c3uv_46_0f_0c_vdo.o
+obj-$(CONFIG_DRM_PANEL_C3UV_42_0F_0D_VDO) += dsi_panel_c3uv_42_0f_0d_vdo.o
+endif

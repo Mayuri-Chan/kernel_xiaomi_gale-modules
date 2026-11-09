@@ -1088,6 +1088,19 @@ mgk_64_platform_device_user_modules = {
 
 
 def get_overlay_modules_list():
+    if "gale" in DEFCONFIG_OVERLAYS:
+        mgk_64_device_modules.extend([
+            "drivers/gpu/drm/panel/dsi_panel_c3uv_bias.ko",
+            "drivers/gpu/drm/panel/dsi_panel_c3uv_43_02_0a_vdo.ko",
+            "drivers/gpu/drm/panel/dsi_panel_c3uv_35_03_0b_vdo.ko",
+            "drivers/gpu/drm/panel/dsi_panel_c3uv_46_0f_0c_vdo.ko",
+            "drivers/gpu/drm/panel/dsi_panel_c3uv_42_0f_0d_vdo.ko",
+            "drivers/input/touchscreen/nt36528_spi/nt36528_spi.ko",
+            "drivers/input/touchscreen/lct_tp/lct_tp.ko",
+            "drivers/power/supply/sc8989x_charger.ko",
+        ])
+        mgk_64_device_modules.remove("drivers/input/touchscreen/NT36532/nt36532.ko")
+
     if "auto.config" in DEFCONFIG_OVERLAYS:
         mgk_64_platform_device_modules.update({"drivers/clk/mediatek/clk-mt6991-ivi.ko":"mt6991"})
         mgk_64_platform_device_modules.update({"drivers/soc/mediatek/mtk-scpsys-mt6991-ivi.ko":"mt6991"})
@@ -1934,7 +1947,8 @@ def get_overlay_modules_list():
         mgk_64_device_modules.remove("drivers/power/supply/mt6375-charger.ko")
         mgk_64_device_modules.remove("drivers/power/supply/rt9490-charger.ko")
         mgk_64_device_modules.remove("drivers/power/supply/rt9758-charger.ko")
-        mgk_64_device_modules.append("drivers/power/supply/bq2589x_charger.ko")
+        if "gale" not in DEFCONFIG_OVERLAYS and "gale.config" not in DEFCONFIG_OVERLAYS:
+            mgk_64_device_modules.append("drivers/power/supply/bq2589x_charger.ko")
 
         mgk_64_device_modules.append("drivers/regulator/mt6358-regulator.ko")
         mgk_64_device_modules.remove("drivers/spmi/spmi-mtk-mpu.ko")

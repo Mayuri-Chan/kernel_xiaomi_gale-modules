@@ -237,6 +237,7 @@ int init_lct_tp_info(char *tp_info_buf)
 
 err_tp_info:
     kfree(lct_tp_p_i);
+    lct_tp_p_i = NULL;
     return -1;
 }
 EXPORT_SYMBOL(init_lct_tp_info);
@@ -264,6 +265,7 @@ int init_lct_tp_lockdown_info(void)
 
 err_tp_lockdown:
     kfree(lct_tp_p_ld);
+    lct_tp_p_ld = NULL;
     return -1;
 }
 EXPORT_SYMBOL(init_lct_tp_lockdown_info);
@@ -283,6 +285,7 @@ void uninit_lct_tp_info(void)
     }
 
     kfree(lct_tp_p_i);
+    lct_tp_p_i = NULL;
     TP_LOGW("done\n");
 }
 EXPORT_SYMBOL(uninit_lct_tp_info);
@@ -301,7 +304,8 @@ void uninit_lct_tp_lockdown_info(void)
         TP_LOGW("remove /proc/%s\n", TP_LOCKDOWN_INFO_NAME);
     }
 
-    kfree(remove_proc_entry);
+    kfree(lct_tp_p_ld);
+    lct_tp_p_ld = NULL;
     TP_LOGW("done\n");
 }
 EXPORT_SYMBOL(uninit_lct_tp_lockdown_info);
