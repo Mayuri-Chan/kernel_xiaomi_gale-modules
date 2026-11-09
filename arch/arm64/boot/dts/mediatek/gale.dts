@@ -1,0 +1,179 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019 MediaTek Inc.
+ */
+
+#include "mt6768.dts"
+
+/ {
+	fpsensor_fp_eint: fpsensor_fp_eint {
+		compatible = "mediatek,fpsensor_fp_eint";
+		int-gpios = <&pio 8 0>;
+	};
+
+	fpsensor_finger: fpsensor_finger {
+		compatible = "mediatek,fingerprint", "mediatek,goodix-fp";
+		fpc,enable-wakeup;
+	};
+
+	silead_fp: silead_fp {
+		compatible = "sil,silead_fp";
+	};
+
+	swtp: swtp {
+		compatible = "mediatek, swtp-eint";
+	};
+
+	tboard_thermistor4: thermal-sensor4 {
+		compatible = "mediatek,mtboard-thermistor4";
+		io-channels = <&auxadc 3>;
+		io-channel-names = "thermistor-ch3";
+	};
+
+	tboard_thermistor5: thermal-sensor5 {
+		compatible = "mediatek,mtboard-thermistor5";
+		io-channels = <&auxadc 4>;
+		io-channel-names = "thermistor-ch4";
+	};
+
+	flashlights_ocp8132: flashlights_ocp8132 {
+		compatible = "mediatek,flashlights_ocp8132";
+		decouple = <1>;
+		channel@1 {
+			type = <0>;
+			ct = <0>;
+			part = <0>;
+		};
+		channel@2 {
+			type = <0>;
+			ct = <1>;
+			part = <0>;
+		};
+	};
+
+	simtray: simtray {
+		compatible = "xiaomi,simtray-status";
+		status-gpio = <&pio 47 0>;
+	};
+
+	thermal_message: thermal-message {
+	};
+
+	xiaomi_touch: xiaomi_touch {
+		status = "ok";
+		compatible = "xiaomi-touch";
+		touch,name = "xiaomi-touch";
+	};
+};
+
+&goodix_fp {
+	compatible = "mediatek,goodix-finger";
+};
+
+&pio {
+	camera_pins_gc6133c_mclk_on: camera_pins_gc6133c_mclk_on {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO111__FUNC_CMMCLK3>;
+		};
+	};
+
+	camera_pins_gc6133c_mclk_off: camera_pins_gc6133c_mclk_off {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO111__FUNC_GPIO111>;
+		};
+	};
+
+	camera_pins_sc080cs_mclk_on: camera_pins_sc080cs_mclk_on {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO111__FUNC_CMMCLK3>;
+		};
+	};
+
+	camera_pins_sc080cs_mclk_off: camera_pins_sc080cs_mclk_off {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO111__FUNC_GPIO111>;
+		};
+	};
+};
+
+&charger {
+	enable_sw_jeita;
+	max_charger_voltage = <10500000>;
+	ac_charger_input_current = <2000000>;
+	temp_t1_thres = <10>;
+};
+
+&i2c6 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	sc8989x_chg: sc8989x_chg@6A {
+		compatible = "southchip,sc89890h";
+		reg = <0x6A>;
+		eint_name = "chr_stat";
+		sc,intr-gpio = <&pio 20 IRQ_TYPE_EDGE_FALLING>;
+		charger_name = "primary_chg";
+		sc,sc8989x,ico-en = <0>;
+		sc,sc8989x,hvdcp-en = <1>;
+		sc,sc8989x,auto-dpdm-en = <0>;
+		sc,sc8989x,vsys-min = <5>;
+		sc,sc8989x,vbatmin-sel = <0>;
+		sc,sc8989x,itrick = <3>;
+		sc,sc8989x,iterm = <4>;
+		sc,sc8989x,vbat-cv = <38>;
+		sc,sc8989x,vbat-low = <1>;
+		sc,sc8989x,vrechg = <0>;
+		sc,sc8989x,en-term = <1>;
+		sc,sc8989x,stat-dis = <0>;
+		sc,sc8989x,wd-time = <0>;
+		sc,sc8989x,en-timer = <1>;
+		sc,sc8989x,charge-timer = <2>;
+		sc,sc8989x,bat-comp = <0>;
+		sc,sc8989x,vclamp = <0>;
+		sc,sc8989x,votg = <11>;
+		sc,sc8989x,iboost = <3>;
+		sc,sc8989x,vindpm = <20>;
+
+		bq,bq25890,votg = <7>;
+		bq,bq25890,iterm = <3>;
+		bq,bq25890,itrick = <3>;
+	};
+};
+
+&extcon_usb {
+	charger = <&sc8989x_chg>;
+};
+
+&i2c4 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	gc6133c@40 {
+		compatible = "gc,gc6133c_yuv";
+		reg = <0x40>;
+		reset-gpio = <&pio 112 0x0>;
+		pinctrl-names = "gc6133c_mclk_on",
+				"gc6133c_mclk_off";
+		pinctrl-0 = <&camera_pins_gc6133c_mclk_on>;
+		pinctrl-1 = <&camera_pins_gc6133c_mclk_off>;
+		vcama-supply = <&mt_pmic_vcama1_ldo_reg>;
+		vcamio-supply = <&mt_pmic_vcamio_ldo_reg>;
+		vcamd-supply = <&mt_pmic_vcamd_ldo_reg>;
+		status = "okay";
+	};
+
+	sc080cs@36 {
+		compatible = "sc,sc080cs_yuv";
+		reg = <0x36>;
+		reset-gpio = <&pio 112 0x0>;
+		pinctrl-names = "sc080cs_mclk_on",
+				"sc080cs_mclk_off";
+		pinctrl-0 = <&camera_pins_sc080cs_mclk_on>;
+		pinctrl-1 = <&camera_pins_sc080cs_mclk_off>;
+		vcamio-supply = <&mt_pmic_vcamio_ldo_reg>;
+		vcama-supply = <&mt_pmic_vcama1_ldo_reg>;
+		vcamd-supply = <&mt_pmic_vcamd_ldo_reg>;
+		status = "okay";
+	};
+};
