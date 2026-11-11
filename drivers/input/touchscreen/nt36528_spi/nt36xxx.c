@@ -76,7 +76,6 @@ static int nvt_mtk_drm_notifier_callback(struct notifier_block *nb,
 
 uint32_t ENG_RST_ADDR  = 0x7FFF80;
 uint32_t SPI_RD_FAST_ADDR = 0;
-int tp_select_proximity = 1;
 
 #if TOUCH_KEY_NUM > 0
 const uint16_t touch_key_array[TOUCH_KEY_NUM] = {

@@ -4,6 +4,7 @@
  */
 
 #include "mt6768.dts"
+#include "gale_touch.dtsi"
 
 / {
 	fpsensor_fp_eint: fpsensor_fp_eint {

@@ -8,7 +8,11 @@
 #   KO_MODULE_NAME KO_MODULE_PATH KO_MODULE_SRC
 #
 
+ifeq ($(CONFIG_MACH_GALE),y)
+KO_MODULE_NAME := omnivision_tcm
+else
 KO_MODULE_NAME := omnivision_td4160
+endif
 $(warning =======================TRAN TD4160 VENDOR START===============================)
 #
 # source

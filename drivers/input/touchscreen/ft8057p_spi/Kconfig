@@ -1,0 +1,10 @@
+# FocalTech FT8057P SPI touchscreen
+
+config TOUCHSCREEN_FT8057P_SPI
+	tristate "FocalTech FT8057P SPI touchscreen for Gale"
+	depends on INPUT_TOUCHSCREEN && MACH_GALE && SPI && OF && GPIOLIB
+	depends on DRM_MEDIATEK_V2
+	select TOUCHSCREEN_COMMON
+	default m
+	help
+	  Build support for Gale devices using the FocalTech FT8057P SPI panel.

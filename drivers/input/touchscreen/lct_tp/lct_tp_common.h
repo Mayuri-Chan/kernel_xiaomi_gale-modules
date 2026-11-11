@@ -42,6 +42,7 @@ typedef struct touchscreen_usb_plugin_data {
 } touchscreen_usb_plugin_data_t;
 
 extern char tp_lockdowninfo[24];
+extern int tp_select_proximity;
 extern touchscreen_usb_plugin_data_t g_touchscreen_usb_pulgin;
 extern bool ps_send_touch_event_probe;
 extern int (*tp_ps_send_touch_event)(int32_t data);

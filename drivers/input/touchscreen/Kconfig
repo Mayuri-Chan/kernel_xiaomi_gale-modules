@@ -6,6 +6,8 @@
 if INPUT_TOUCHSCREEN
 
 source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/nt36528_spi/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/ft8057p_spi/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/input/touchscreen/icnl9916_spi/Kconfig"
 
 config TOUCHSCREEN_MTK_TOUCH
        string "Touch IC name for Mediatek package"
@@ -51,6 +53,14 @@ config TOUCHSCREEN_TD4160_TOUCH
        help
          Set Y or M to select this feature for touch compile,
          and set N to disable.for car serdes touch feature.
+
+config TOUCHSCREEN_OMNIVISION_TCM_SPI
+	tristate "OmniVision TCM SPI touchscreen for Gale"
+	depends on MACH_GALE && SPI && OF
+	depends on DRM_MEDIATEK_V2
+	select TOUCHSCREEN_COMMON
+	help
+	  Build the OmniVision TCM SPI driver used by Gale touch panel variants.
 
 config TOUCHSCREEN_CHSC5448_P785
 	tristate "CHSC5448_P785 for Mediatek package"

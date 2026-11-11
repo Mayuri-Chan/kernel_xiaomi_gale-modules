@@ -13,6 +13,8 @@
  ****************************************************************************************
  */
 #include <linux/module.h>
+#include <linux/ctype.h>
+#include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/string.h>
 #include <linux/slab.h>
@@ -83,26 +85,40 @@ static lct_tp_t_lockdown *lct_tp_p_ld = NULL;
 
 void lct_tp_get_panel_info(void)
 {
-    struct device_node *pDeviceNode;
-    const char* data = NULL;
-    char *temp = NULL;
-    char *temp2 = NULL;
-    unsigned long size = 0;
-    pr_info("start\n");
+	struct device_node *pDeviceNode;
+	const char *data = NULL;
+	const char *value;
+	size_t len;
+	pr_info("start\n");
     pDeviceNode = of_find_node_by_path("/chosen");
-    if (pDeviceNode) {
-        data = of_get_property(pDeviceNode,"bootargs",(int *)&size);
-        if (!data) {
-            pr_err("bootargs invalid\n");
-            return;
-        }
-        temp = strstr(data,"lcm_name=");
-        temp2 = strstr(temp,"=");
-        strncpy(touch_lcm_name,temp2+1,31);
-    } else {
-        pr_err("/choosen invalid\n");
+	if (!pDeviceNode) {
+		pr_err("/chosen invalid\n");
+		touch_lcm_name[0] = '\0';
+		return;
     }
-    return;
+
+	if (of_property_read_string(pDeviceNode, "bootargs", &data)) {
+		pr_err("bootargs invalid\n");
+		touch_lcm_name[0] = '\0';
+		goto out;
+	}
+
+	value = strstr(data, "lcm_name=");
+	if (!value || (value != data && !isspace(value[-1]))) {
+		pr_err("lcm_name missing from bootargs\n");
+		touch_lcm_name[0] = '\0';
+		goto out;
+	}
+
+	value += strlen("lcm_name=");
+	len = strcspn(value, " \t\n");
+	if (len >= sizeof(touch_lcm_name))
+		len = sizeof(touch_lcm_name) - 1;
+	memcpy(touch_lcm_name, value, len);
+	touch_lcm_name[len] = '\0';
+
+out:
+	of_node_put(pDeviceNode);
 }
 EXPORT_SYMBOL_GPL(lct_tp_get_panel_info);
 

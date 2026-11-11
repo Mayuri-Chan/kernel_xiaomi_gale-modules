@@ -11,6 +11,9 @@
 char tp_lockdowninfo[24];
 EXPORT_SYMBOL_GPL(tp_lockdowninfo);
 
+int tp_select_proximity = 1;
+EXPORT_SYMBOL_GPL(tp_select_proximity);
+
 touchscreen_usb_plugin_data_t g_touchscreen_usb_pulgin;
 EXPORT_SYMBOL_GPL(g_touchscreen_usb_pulgin);
 

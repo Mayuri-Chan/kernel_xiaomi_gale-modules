@@ -31,6 +31,7 @@
 #include <linux/of_gpio.h>
 #include "omnivision_tcm_core.h"
 #include <linux/spi/spidev.h>
+#include "../lct_tp/lct_tp_common.h"
 
 #include <linux/platform_data/spi-mt65xx.h>  //具体哪一个平台文件请修改
 
@@ -638,6 +639,12 @@ static struct mtk_chip_config spi_ctrdata = {
 static int ovt_tcm_spi_probe(struct spi_device *spi)
 {
 	int retval;
+
+	if (!lct_tp_panel_match("dsi_panel_c3uv_46_0f_0c_vdo") &&
+	    !lct_tp_panel_match("dsi_panel_c3u_46_0f_0c_dsc_vdo")) {
+		LOGI(&spi->dev, "not an OmniVision panel, skip probe\n");
+		return -ENODEV;
+	}
 
     if (spi->master->flags & SPI_MASTER_HALF_DUPLEX) {
         LOGE(&spi->dev,
