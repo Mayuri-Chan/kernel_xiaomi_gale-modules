@@ -319,18 +319,7 @@ static int free_reserved_buf(phys_addr_t start_phys, phys_addr_t end_phys)
 
 int free_fb_buf(void)
 {
-	phys_addr_t fb_base;
-	unsigned int vramsize, fps;
-
-	_parse_tag_videolfb(&vramsize, &fb_base, &fps);
-
-	if (fb_base)
-		free_reserved_buf(fb_base, fb_base + vramsize);
-	else {
-		DDPINFO("%s:get fb pa error\n", __func__);
-		return -1;
-	}
-
+	DDPINFO("%s: skip freeing nomap bootloader fb to prevent clear_page crash\n", __func__);
 	return 0;
 }
 
