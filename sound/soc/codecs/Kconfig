@@ -16,6 +16,7 @@ config DEVICE_MODULES_SND_SOC_ALL_CODECS
 	imply SND_SOC_TFA9874
         imply SND_SOC_RT5509
         imply SND_SOC_FS16XX
+        imply SND_SOC_FS15XX
 	help
 	  Normally ASoC codec drivers are only built if a machine driver which
 	  uses them is also built since they are only usable with a machine
@@ -59,6 +60,11 @@ config SND_SOC_FS16XX
 	  Config of FS18xx . It is a Smart power amplifier which contain speaker protection,
 	  multi-band DRC, equalizer function. It would be set to yes if device with FS18xx on it.
 	  Select this if your FS16xx is connected via an I2S bus.
+
+config SND_SOC_FS15XX
+	tristate "SoC Audio for foursemi FS15XX Smart K PA"
+	help
+	  This option enables support for FS15XX Smart K PA.
 
 config SND_SOC_AW883XX
 	tristate "SoC Audio for awinic AW883XX Smart K PA"

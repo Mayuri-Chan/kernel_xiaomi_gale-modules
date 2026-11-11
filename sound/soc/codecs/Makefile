@@ -49,5 +49,6 @@ obj-$(CONFIG_SND_SOC_FS16XX)    += fs18xx/
 obj-$(CONFIG_SND_SOC_RT9123)	+= richtek/rt9123/
 obj-$(CONFIG_SND_SOC_AW883XX)   += aw883xx/
 obj-$(CONFIG_SND_SOC_AW87XXX)   += aw87xxx/
+obj-$(CONFIG_SND_SOC_FS15XX)    += fs15xx/
 
 obj-$(CONFIG_LCT_AUDIO_INFO) += lct_audio_pa_info/

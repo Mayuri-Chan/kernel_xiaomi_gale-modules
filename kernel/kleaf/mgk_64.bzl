@@ -1102,6 +1102,7 @@ def get_overlay_modules_list():
             "drivers/input/touchscreen/lct_tp/lct_tp.ko",
             "drivers/power/supply/sc8989x_charger.ko",
             "drivers/power/supply/lc_charger_sysfs.ko",
+            "sound/soc/codecs/fs15xx/snd-soc-fs15xx.ko",
         ])
         mgk_64_device_modules.remove("drivers/input/touchscreen/NT36532/nt36532.ko")
 
