@@ -5,6 +5,10 @@ config CHARGER_SC8989X
 	depends on MTK_CHARGER && USB_MTK_HDRC
 	select REGMAP_I2C
 
+config LC_CHARGER_SYSFS
+	tristate "Gale charger sysfs interfaces"
+	depends on MTK_CHARGER && TCPC_CLASS && DRM_MEDIATEK_V2
+
 config MTK_CHARGER
 	tristate "MediaTek Charging Driver"
 	depends on MTK_USB_TYPEC

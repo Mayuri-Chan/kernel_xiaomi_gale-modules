@@ -46,6 +46,7 @@ do {								\
 } while (0)
 
 struct mtk_charger;
+int charger_manager_pd_is_online(void);
 struct charger_data;
 #define BATTERY_CV 4350000
 #define V_CHARGER_MAX 6500000 /* 6.5 V */
@@ -495,6 +496,7 @@ struct mtk_charger {
 	int protocol_state;
 	int ta_capability;
 	int wait_times;
+	bool ship_mode;
 };
 
 static inline int mtk_chg_alg_notify_call(struct mtk_charger *info,

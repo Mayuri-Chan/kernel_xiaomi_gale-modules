@@ -77,5 +77,6 @@ obj-$(CONFIG_CHARGER_RT9758)	+= rt9758-charger.o
 obj-$(CONFIG_UFCS_CLASS)	+= ufcs/
 
 obj-$(CONFIG_CHARGER_BQ2589X)	+= bq2589x_charger.o
+obj-$(CONFIG_LC_CHARGER_SYSFS) += lc_charger_sysfs.o
 CFLAGS_lc_charger_sysfs.o += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
 obj-$(CONFIG_CHARGER_BQ25601) += bq25601.o

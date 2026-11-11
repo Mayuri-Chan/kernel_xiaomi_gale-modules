@@ -9,6 +9,19 @@
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
+#include <linux/notifier.h>
+
+struct xm_charger_dfs_data {
+	const char *name;
+	int reserved;
+	int adapter_id;
+	int reserved2;
+	int master_ok;
+};
+
+int register_xm_charger_dfs_notifier(struct notifier_block *nb);
+int unregister_xm_charger_dfs_notifier(struct notifier_block *nb);
+void xm_charger_dfs_notify(unsigned int event, struct xm_charger_dfs_data *data);
 
 enum adc_channel {
 	ADC_CHANNEL_VBUS,

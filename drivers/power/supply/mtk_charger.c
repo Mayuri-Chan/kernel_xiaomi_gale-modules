@@ -66,6 +66,23 @@
 #include "mtk_charger.h"
 #include "mtk_battery.h"
 
+int charger_manager_pd_is_online(void)
+{
+	struct power_supply *psy;
+	struct mtk_charger *info;
+	int online = 0;
+
+	psy = power_supply_get_by_name("mtk-master-charger");
+	if (!psy)
+		return 0;
+	info = power_supply_get_drvdata(psy);
+	if (info)
+		online = info->ta_status[PD] == TA_ATTACH;
+	power_supply_put(psy);
+	return online;
+}
+EXPORT_SYMBOL(charger_manager_pd_is_online);
+
 struct tag_bootmode {
 	u32 size;
 	u32 tag;

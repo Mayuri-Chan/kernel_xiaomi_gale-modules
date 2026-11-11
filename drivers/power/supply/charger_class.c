@@ -14,6 +14,26 @@
 #include "charger_class.h"
 
 static struct class *charger_class;
+SRCU_NOTIFIER_HEAD_STATIC(xm_dfs_evt_nh);
+
+int register_xm_charger_dfs_notifier(struct notifier_block *nb)
+{
+	return srcu_notifier_chain_register(&xm_dfs_evt_nh, nb);
+}
+EXPORT_SYMBOL(register_xm_charger_dfs_notifier);
+
+int unregister_xm_charger_dfs_notifier(struct notifier_block *nb)
+{
+	return srcu_notifier_chain_unregister(&xm_dfs_evt_nh, nb);
+}
+EXPORT_SYMBOL(unregister_xm_charger_dfs_notifier);
+
+void xm_charger_dfs_notify(unsigned int event, struct xm_charger_dfs_data *data)
+{
+	if (event < 18)
+		srcu_notifier_call_chain(&xm_dfs_evt_nh, event, data);
+}
+EXPORT_SYMBOL(xm_charger_dfs_notify);
 
 static ssize_t name_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
