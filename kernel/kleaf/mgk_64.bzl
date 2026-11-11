@@ -1118,6 +1118,7 @@ def get_overlay_modules_list():
             "sound/soc/codecs/fs15xx/snd-soc-fs15xx.ko",
             "drivers/thermal/mediatek/charger_cooling.ko",
             "drivers/thermal/mediatek/mtk_charger_cooler.ko",
+            "drivers/misc/mediatek/miev/miev.ko",
         ])
         mgk_64_device_modules.remove("drivers/input/touchscreen/NT36532/nt36532.ko")
 

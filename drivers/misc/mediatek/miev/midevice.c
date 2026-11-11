@@ -321,15 +321,11 @@ static int __init miev_init_module(void)
 		ret = -ENOMEM;
 		goto err;
 	}
-	miev_dev->dev_no = MKDEV(DEV_MAJOR, DEV_MINOR);
-	ret = register_chrdev_region(miev_dev->dev_no, 1, DEV_NAME);
+	ret = alloc_chrdev_region(&miev_dev->dev_no, 0, 1, DEV_NAME);
 	if (ret < 0) {
-		ret = alloc_chrdev_region(&miev_dev->dev_no, 0, 1, DEV_NAME);
-		if (ret < 0) {
-			ret = -ENODEV;
-			pr_err("Fail to register_chrdev_region");
-			goto err_register;
-		}
+		ret = -ENODEV;
+		pr_err("Fail to allocate chrdev_region\n");
+		goto err_register;
 	}
 	cdev_init(&miev_dev->chrdev, &miev_fops);
 	miev_dev->chrdev.owner = THIS_MODULE;
