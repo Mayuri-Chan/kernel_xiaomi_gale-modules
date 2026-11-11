@@ -12,11 +12,28 @@ EXPORT_SYMBOL_GPL(lcd_reset_keep_high);
 bool lcd_gesture_mode;
 EXPORT_SYMBOL_GPL(lcd_gesture_mode);
 
+bool lcd_gesture_flag;
+EXPORT_SYMBOL(lcd_gesture_flag);
+
+bool fts_gesture_flag;
+EXPORT_SYMBOL(fts_gesture_flag);
+
+void fts_fwresume_work(void)
+{
+}
+EXPORT_SYMBOL(fts_fwresume_work);
+
 void set_lcd_reset_gpio_keep_high(bool enable)
 {
 	WRITE_ONCE(lcd_reset_keep_high, enable);
 }
 EXPORT_SYMBOL_GPL(set_lcd_reset_gpio_keep_high);
+
+void set_prox_lcd_reset_gpio_keep_high(bool enable)
+{
+	set_lcd_reset_gpio_keep_high(enable);
+}
+EXPORT_SYMBOL(set_prox_lcd_reset_gpio_keep_high);
 
 void set_lcd_gesture_mode(bool enable)
 {
