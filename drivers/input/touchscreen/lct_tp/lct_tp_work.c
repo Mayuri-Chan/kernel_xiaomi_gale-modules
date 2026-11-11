@@ -13,6 +13,7 @@
  ****************************************************************************************
  */
 #include <linux/module.h>
+#include <linux/compiler.h>
 #include <linux/device.h>
 #include <linux/string.h>
 #include <linux/slab.h>
@@ -45,7 +46,6 @@ typedef int (*tp_work_cb_t)(bool enable_tp);
 
 typedef struct lct_tp
 {
-    bool enable_tp_work_flag;
     struct proc_dir_entry *proc_entry_tp;
     tp_work_cb_t pfun;
 } lct_tp_t;
@@ -55,6 +55,8 @@ typedef struct lct_tp
  ****************************************************************************************
  */
 static lct_tp_t *lct_tp_p = NULL;
+/* Resume must work even when the optional procfs setup failed or was unwound. */
+static bool enable_tp_work_flag = true;
 
 /*
  * FUNCTION DEFINITIONS
@@ -85,11 +87,12 @@ int init_lct_tp_work(tp_work_cb_t callback)
         return -ENOMEM;
     }
     lct_tp_p->pfun = callback;
-    lct_tp_p->enable_tp_work_flag = true;
+    WRITE_ONCE(enable_tp_work_flag, true);
 
     if (lct_creat_proc_tp_entry() < 0)
     {
         kfree(lct_tp_p);
+        lct_tp_p = NULL;
         return -1;
     }
 
@@ -109,19 +112,21 @@ void uninit_lct_tp_work(void)
         TP_LOGW("remove /proc/%s\n", TP_WORK_NAME);
     }
     kfree(lct_tp_p);
+    lct_tp_p = NULL;
+    WRITE_ONCE(enable_tp_work_flag, true);
     return;
 }
 EXPORT_SYMBOL(uninit_lct_tp_work);
 
 void set_lct_tp_work_status(bool en)
 {
-    lct_tp_p->enable_tp_work_flag = en;
+    WRITE_ONCE(enable_tp_work_flag, en);
 }
 EXPORT_SYMBOL(set_lct_tp_work_status);
 
 bool get_lct_tp_work_status(void)
 {
-    return lct_tp_p->enable_tp_work_flag;
+    return READ_ONCE(enable_tp_work_flag);
 }
 EXPORT_SYMBOL(get_lct_tp_work_status);
 
@@ -150,7 +155,7 @@ static ssize_t lct_proc_tp_work_read(struct file *file, char __user *buf, size_t
     if (IS_ERR_OR_NULL(page))
         return -ENOMEM;
 
-    cnt = sprintf(page, "%s", (lct_tp_p->enable_tp_work_flag ? "1\n" : "0\n"));
+    cnt = sprintf(page, "%s", (get_lct_tp_work_status() ? "1\n" : "0\n"));
 
     cnt = simple_read_from_buffer(buf, size, ppos, page, cnt);
     if (*ppos != cnt)
@@ -179,7 +184,7 @@ static ssize_t lct_proc_tp_work_write(struct file *file, const char __user *buf,
 
     if (input > 0)
     {
-        if (lct_tp_p->enable_tp_work_flag)
+        if (get_lct_tp_work_status())
             goto exit;
         TP_LOGW("Enbale Touchpad ...\n");
         ret = lct_tp_p->pfun(true);
@@ -188,11 +193,11 @@ static ssize_t lct_proc_tp_work_write(struct file *file, const char __user *buf,
             TP_LOGW("Enable Touchpad Failed! ret=%d\n", ret);
             goto exit;
         }
-        lct_tp_p->enable_tp_work_flag = true;
+        set_lct_tp_work_status(true);
     }
     else
     {
-        if (!lct_tp_p->enable_tp_work_flag)
+        if (!get_lct_tp_work_status())
             goto exit;
         TP_LOGW("Disable Touchpad ...\n");
         ret = lct_tp_p->pfun(false);
@@ -201,7 +206,7 @@ static ssize_t lct_proc_tp_work_write(struct file *file, const char __user *buf,
             TP_LOGW("Disable Touchpad Failed! ret=%d\n", ret);
             goto exit;
         }
-        lct_tp_p->enable_tp_work_flag = false;
+        set_lct_tp_work_status(false);
     }
     TP_LOGW("Set Touchpad successfully!\n");
 
