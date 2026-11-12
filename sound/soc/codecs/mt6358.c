@@ -24,6 +24,9 @@
 #if IS_ENABLED(CONFIG_SND_SOC_MT6366_ACCDET) || IS_ENABLED(CONFIG_SND_SOC_MT6358_ACCDET)
 #include "mt6358-accdet.h"
 #endif
+#if IS_ENABLED(CONFIG_SND_SOC_FS15XX)
+#include "fs15xx/fs15xx.h"
+#endif
 
 #if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
 extern int aw87xxx_add_codec_controls(void *codec);
@@ -6738,6 +6741,10 @@ static int mt6358_codec_probe(struct snd_soc_component *cmpnt)
 				       mt6358_snd_vow_controls,
 				       ARRAY_SIZE(mt6358_snd_vow_controls));
 	mt6358_codec_init_reg(priv);
+
+#if IS_ENABLED(CONFIG_SND_SOC_FS15XX)
+	fs15xx_add_codec_kcontrol(cmpnt);
+#endif
 
 #if !defined(SKIP_SB) && !defined(CONFIG_FPGA_EARLY_PORTING)
 	priv->hp_current_calibrate_val = get_hp_current_calibrate_val(priv);

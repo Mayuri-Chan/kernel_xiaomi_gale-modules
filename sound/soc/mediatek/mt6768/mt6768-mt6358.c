@@ -20,6 +20,9 @@
 #if IS_ENABLED(CONFIG_LCT_AUDIO_INFO)
 extern int lct_audio_info_create_sysfs(void);
 #endif
+#if IS_ENABLED(CONFIG_SND_SOC_FS15XX)
+#include "../../codecs/fs15xx/fs15xx.h"
+#endif
 #if IS_ENABLED(CONFIG_AW862xx_HAPTIC)
 #include "mt6768-mt6358-ref.h"
 #endif
@@ -108,6 +111,9 @@ static int mt6768_mt6358_spk_amp_event(struct snd_soc_dapm_widget *w,
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
 		/* spk amp on control */
+#if IS_ENABLED(CONFIG_SND_SOC_FS15XX)
+		ext_amp_poweron(1);
+#endif
 #if IS_ENABLED(CONFIG_AW862xx_HAPTIC)
 		ref_ext_amp_switch(true);
 #endif
@@ -130,6 +136,9 @@ static int mt6768_mt6358_spk_amp_event(struct snd_soc_dapm_widget *w,
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		/* spk amp off control */
+#if IS_ENABLED(CONFIG_SND_SOC_FS15XX)
+		ext_amp_poweron(0);
+#endif
 #if IS_ENABLED(CONFIG_AW862xx_HAPTIC)
 		ref_ext_amp_switch(false);
 #endif

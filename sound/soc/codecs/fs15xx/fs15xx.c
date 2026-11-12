@@ -31,7 +31,7 @@ static atomic_t g_fs15xx_switch;
 static struct aw87xx_dev_t* aw87xx_dev = NULL;
 /*zpc add for combal awinic amp end*/
 
-#ifdef CONFIG_LCT_AUDIO_INFO
+#if IS_ENABLED(CONFIG_LCT_AUDIO_INFO)
 extern int lct_audio_info_set_pa_name(char *pa_name, int count);
 #endif
 
@@ -55,7 +55,7 @@ static int fs15xx_pinctrl_init(struct platform_device *pdev, fs15xx_dev_t *fs15x
 	ctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR(ctrl)) {
 		dev_err(&pdev->dev, "not found pinctrl!\n");
-		ret = PTR_ERR(fs15xx->pinctrl);
+		ret = PTR_ERR(ctrl);
 		fs15xx->pinctrl = NULL;
 		return ret;
 	}
@@ -870,14 +870,14 @@ static int fs15xx_check_pa_type(fs15xx_dev_t *fs15xx)
 	gpio_set_value(fs15xx->gpio_id, 0); // set gpio low
 #endif
 	if (level == 0) {
-		#ifdef CONFIG_LCT_AUDIO_INFO
+		#if IS_ENABLED(CONFIG_LCT_AUDIO_INFO)
 		lct_audio_info_set_pa_name(FS15XX_DRV_NAME, strlen(FS15XX_DRV_NAME));
 		#endif
 		pr_info("fs15xx detected\n");
 		return 0;
 	} else {
 		if (!(use_aw87xx_ext_amp(fs15xx))) {
-			#ifdef CONFIG_LCT_AUDIO_INFO
+			#if IS_ENABLED(CONFIG_LCT_AUDIO_INFO)
 			lct_audio_info_set_pa_name(AW87XX_DEV_NAME, strlen(AW87XX_DEV_NAME));
 			#endif
 			pr_info("aw87xx detected\n");
