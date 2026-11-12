@@ -43,6 +43,7 @@ unsigned char *vfs_flush_address;
 struct service_handler reetime;
 struct service_handler vfs_handler;
 static struct completion teei_bdrv_comp;
+static struct completion teei_bdrv_done;
 
 
 static long register_shared_param_buf(struct service_handler *handler)
@@ -57,10 +58,10 @@ static long register_shared_param_buf(struct service_handler *handler)
 
 #ifdef UT_DMA_ZONE
 	handler->param_buf = (void *)__get_free_pages(GFP_KERNEL | GFP_DMA,
-				get_order(ROUND_UP(handler->size, SZ_4K)));
+				teei_get_order(ROUND_UP(handler->size, SZ_4K)));
 #else
 	handler->param_buf = (void *)__get_free_pages(GFP_KERNEL,
-				get_order(ROUND_UP(handler->size, SZ_4K)));
+				teei_get_order(ROUND_UP(handler->size, SZ_4K)));
 #endif
 	if ((unsigned char *)(handler->param_buf) == NULL) {
 		IMSG_ERROR("[%s][%d]: kmalloc vdrv_buffer failed.\n",
@@ -92,7 +93,7 @@ static long register_shared_param_buf(struct service_handler *handler)
 free_memory:
 	/* Release the resource and return. */
 	free_pages((unsigned long)(handler->param_buf),
-				get_order(ROUND_UP(handler->size, SZ_4K)));
+				teei_get_order(ROUND_UP(handler->size, SZ_4K)));
 	handler->param_buf = NULL;
 
 	return retVal;
@@ -111,8 +112,8 @@ static void reetime_deinit(struct service_handler *handler)
 static int reetime_handle(struct NQ_entry *entry)
 {
 	struct timespec64 tp;
-	int tv_sec;
-	int tv_usec;
+	long tv_sec;
+	long tv_usec;
 	unsigned long long block_p = 0;
 	unsigned long long time_type = 0;
 	int retVal = 0;
@@ -121,7 +122,7 @@ static int reetime_handle(struct NQ_entry *entry)
 	block_p = entry->block_p;
 
 	if (time_type == GET_UPTIME) {
-		getboottime64(&tp);
+		ktime_get_boottime_ts64(&tp);
 		tv_sec = tp.tv_sec;
 		tv_usec = tp.tv_nsec / 1000;
 	} else {
@@ -281,6 +282,11 @@ void teei_notify_bdrv_fn(void)
 	complete(&teei_bdrv_comp);
 }
 
+void teei_wait_for_bdrv_done(void)
+{
+	wait_for_completion(&teei_bdrv_done);
+}
+
 int teei_bdrv_fn(void *work)
 {
 	struct bdrv_work_struct *bdrv_entry = NULL;
@@ -302,6 +308,8 @@ int teei_bdrv_fn(void *work)
 			IMSG_ERROR("TEEI: Failed to handle the bdrv entry\n");
 			return retVal;
 		}
+
+		complete(&teei_bdrv_done);
 	}
 
 	return 0;
@@ -310,6 +318,7 @@ int teei_bdrv_fn(void *work)
 int init_bdrv_comp_fn(void)
 {
 	init_completion(&teei_bdrv_comp);
+	init_completion(&teei_bdrv_done);
 
 	return 0;
 }

@@ -157,11 +157,8 @@ static int tee_ioctl_version(struct tee_context *ctx,
 
 static inline void flush_shm_dcache(void *start, size_t len)
 {
-#ifdef CONFIG_ARM64
-		__flush_dcache_area(start, len);
-#else
-		__cpuc_flush_dcache_area(start, len);
-#endif
+	__Flush_Dcache_By_Area((unsigned long)start,
+				(unsigned long)(start + len));
 }
 
 static inline void invalid_shm_dcache(void *start, size_t len)
@@ -888,7 +885,7 @@ static int tee_k_ioctl_set_hostname(struct tee_context *ctx,
 }
 
 static int tee_ioctl_set_hostname(struct tee_context *ctx,
-			struct tee_ioctl_close_session_arg __user *uarg)
+			struct tee_ioctl_set_hostname_arg __user *uarg)
 {
 	struct tee_ioctl_set_hostname_arg arg;
 

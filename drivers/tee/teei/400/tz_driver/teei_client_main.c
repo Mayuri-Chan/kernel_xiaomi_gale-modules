@@ -187,6 +187,18 @@ static struct tz_driver_state *tz_drv_state;
 static void *teei_cpu_write_owner;
 static struct platform_device *g_teei_pdev;
 
+int teei_get_order(unsigned long size)
+{
+	int idx = get_order(size);
+
+	if (idx >= 11) {
+		idx = 10;
+		IMSG_ERROR("failed to add device data, idx:%x, size:%lx\n",
+			idx, size);
+	}
+	return idx;
+}
+
 int teei_set_switch_pri(unsigned long policy)
 {
 #ifdef DYNAMIC_SET_PRIORITY
@@ -263,16 +275,16 @@ void *tz_malloc_shared_mem(size_t size, int flags)
 {
 #ifdef UT_DMA_ZONE
 	return (void *) __get_free_pages(flags | GFP_DMA,
-					get_order(ROUND_UP(size, SZ_4K)));
+					teei_get_order(ROUND_UP(size, SZ_4K)));
 #else
 	return (void *) __get_free_pages(flags,
-					get_order(ROUND_UP(size, SZ_4K)));
+					teei_get_order(ROUND_UP(size, SZ_4K)));
 #endif
 }
 
 void tz_free_shared_mem(void *addr, size_t size)
 {
-	free_pages((unsigned long)addr, get_order(ROUND_UP(size, SZ_4K)));
+	free_pages((unsigned long)addr, teei_get_order(ROUND_UP(size, SZ_4K)));
 }
 
 int teei_move_cpu_context(int target_cpu_id, int original_cpu_id)
@@ -370,7 +382,7 @@ int handle_switch_core(int cpu)
 
 	current_cpu_id = switch_to_cpu_id;
 
-	IMSG_PRINTK("change cpu id from %d(0x%lx) to %d(0x%lx)\n",
+	IMSG_PRINTK("change cpu id from %d(0x%x) to %d(0x%x)\n",
 			cpu, teei_cpu_id[cpu],
 			switch_to_cpu_id, teei_cpu_id[switch_to_cpu_id]);
 
@@ -540,10 +552,10 @@ static int init_teei_framework(void)
 
 #ifdef UT_DMA_ZONE
 	boot_vfs_addr = (unsigned long)__get_free_pages(GFP_KERNEL | GFP_DMA,
-					get_order(ROUND_UP(VFS_SIZE, SZ_4K)));
+					teei_get_order(ROUND_UP(VFS_SIZE, SZ_4K)));
 #else
 	boot_vfs_addr = (unsigned long) __get_free_pages(GFP_KERNEL,
-					get_order(ROUND_UP(VFS_SIZE, SZ_4K)));
+					teei_get_order(ROUND_UP(VFS_SIZE, SZ_4K)));
 #endif
 	if ((unsigned char *)boot_vfs_addr == NULL)
 		return TEEI_BOOT_ERROR_CREATE_VFS_ADDR;
@@ -563,7 +575,7 @@ static int init_teei_framework(void)
 
 	TEEI_BOOT_FOOTPRINT("TEEI BOOT Stage1 Completed");
 
-	free_pages(boot_vfs_addr, get_order(ROUND_UP(VFS_SIZE, SZ_4K)));
+	free_pages(boot_vfs_addr, teei_get_order(ROUND_UP(VFS_SIZE, SZ_4K)));
 
 	boot_soter_flag = END_STATUS;
 	if (soter_error_flag == 1)

@@ -95,5 +95,6 @@ extern void bootprof_log_boot(char *str);
 extern void cpus_write_lock(void);
 extern void cpus_write_unlock(void);
 
+int teei_get_order(unsigned long size);
 int teei_set_switch_pri(unsigned long policy);
 #endif /* __TEEI_CLIENT_MAIN_H__ */

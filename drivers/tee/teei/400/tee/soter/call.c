@@ -13,6 +13,7 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
+#include <linux/timekeeping.h>
 
 #define IMSG_TAG "[tz_driver]"
 #include <imsg_log.h>
@@ -23,8 +24,8 @@
 
 #if IS_ENABLED(CONFIG_MICROTRUST_TZDRIVER_DYNAMICAL_DEBUG)
 unsigned long ree_dynamical_debug;
-struct timeval start_val;
-struct timeval end_val;
+struct timespec64 start_val;
+struct timespec64 end_val;
 #endif
 
 static struct tee_shm *get_msg_arg(struct tee_context *ctx, size_t num_params,
@@ -367,11 +368,11 @@ int soter_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 	if (tzdriver_dynamical_debug_flag == 1) {
 		IMSG_PRINTK("TEEI: %s START (TA: %s).\n",
 							__func__, sess->uuid);
-		do_gettimeofday(&start_val);
+		ktime_get_real_ts64(&start_val);
 		if (likely(ree_dynamical_debug == REE_DYNAMICAL_START)) {
 			time_used = (start_val.tv_sec - end_val.tv_sec)
 				* 1000000 +
-				(start_val.tv_usec - end_val.tv_usec);
+				(start_val.tv_nsec - end_val.tv_nsec) / 1000;
 			IMSG_PRINTK(
 				"TEEI: TA(%s) CMD_ID: 0x%x REE USED %ld us.\n",
 				sess->uuid, arg->func, time_used);
@@ -386,9 +387,9 @@ int soter_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 
 #if IS_ENABLED(CONFIG_MICROTRUST_TZDRIVER_DYNAMICAL_DEBUG)
 	if (tzdriver_dynamical_debug_flag == 1) {
-		do_gettimeofday(&end_val);
+		ktime_get_real_ts64(&end_val);
 		time_used = (end_val.tv_sec - start_val.tv_sec) * 1000000
-				+ (end_val.tv_usec - start_val.tv_usec);
+				+ (end_val.tv_nsec - start_val.tv_nsec) / 1000;
 
 		IMSG_PRINTK("TEEI: TA(%s) CMD_ID: 0x%x TEE USED %ld us.\n",
 				sess->uuid, arg->func, time_used);
