@@ -113,7 +113,7 @@ static const struct of_device_id gf_of_match[] = {
     //{ .compatible = "mediatek,fingerprint", },
     //{ .compatible = "mediatek,goodix-fp", },
     {
-        .compatible = "mediatek,goodix_fp",
+        .compatible = "mediatek,goodix-fp",
     },
     {},
 };
@@ -198,7 +198,7 @@ static int gf_get_gpio_dts_info(struct gf_device *gf_dev)
     struct device_node *node = NULL;
     struct platform_device *pdev = NULL;
     gf_debug(DEBUG_LOG, "%s, from dts pinctrl\n", __func__);
-    node = of_find_compatible_node(NULL, NULL, "mediatek,goodix_fp");
+    node = of_find_compatible_node(NULL, NULL, "mediatek,goodix-fp");
     gf_debug(ERR_LOG, "[gf][goodix_test] %s node = %p\n", __func__, node);
     if (node) {
         /*
@@ -1967,7 +1967,7 @@ static int gf_probe(struct platform_device *pdev)
     mdelay(1);
     gf_spi_read_bytes(gf_dev, 0x0000, 4, rx_test);
     //printk("%s rx_test chip id:0x%x 0x%x 0x%x 0x%x \n", __func__,rx_test[0],rx_test[1],rx_test[2],rx_test[3]);
-    if((rx_test[0]!= 0x05) || (rx_test[1] != 0x01) || (rx_test[2] != 0x02) || (rx_test[3]!=0x01))
+    if((rx_test[0]!= 0x05) || (rx_test[1] != 0x05) || (rx_test[2] != 0x02) || (rx_test[3]!=0x01))
     {
         goodix_fp_exist = false;
         gf_debug(ERR_LOG, "%s, get goodix FP sensor chipID fail!!\n" , __func__);
@@ -2242,7 +2242,7 @@ static int check_hwid(struct spi_device *spi)
         retry++;
         gf_spi_read_bytes(gf_dev, 0x0000, 4, rx_test);
         gf_debug(INFO_LOG, "%s rx_test chip id:0x%x 0x%x 0x%x 0x%x \n", __func__, rx_test[0], rx_test[1], rx_test[2], rx_test[3]);
-        if ((rx_test[0] != 0x06) || (rx_test[1] != 0x01) || (rx_test[2] != 0x02) || (rx_test[3] != 0x01)) {
+        if ((rx_test[0] != 0x05) || (rx_test[1] != 0x05) || (rx_test[2] != 0x02) || (rx_test[3] != 0x01)) {
             gf_debug(ERR_LOG, "%s, get goodix FP sensor chipID fail. retry = %d\n", __func__, retry);
             mdelay(2);
         } else {

@@ -1026,7 +1026,7 @@ static void silfp_exit(struct silfp_data *fp_dev)
         unregister_early_suspend(&fp_dev->es);
     }
 #else
-    fb_unregister_client(&fp_dev->notif);
+    drm_unregister_client(&fp_dev->notif);
 #endif /* CONFIG_HAS_EARLYSUSPEND */
 
     // silfp_set_spi(fp_dev, false); /* release SPI resources */
