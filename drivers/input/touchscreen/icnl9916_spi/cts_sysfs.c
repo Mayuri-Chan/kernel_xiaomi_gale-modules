@@ -12,6 +12,7 @@
 
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
 #include "../lct_tp/tp_common.h"
+#include "../lct_tp/lct_tp_gesture.h"
 #endif
 #include "../xiaomi/xiaomi_touch.h"
 
@@ -2369,7 +2370,7 @@ static DEVICE_ATTR(debug_spi, S_IRUSR | S_IWUSR, debug_spi_show,
 static ssize_t double_tap_show(struct kobject *kobj,
                                struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%d\n", cts_is_gesture_wakeup_enabled(g_cts_dev));
+    return sprintf(buf, "%d\n", cts_gesture_flag ? 1 : 0);
 }
 
 static ssize_t double_tap_store(struct kobject *kobj,
@@ -2377,16 +2378,12 @@ static ssize_t double_tap_store(struct kobject *kobj,
                                 size_t count)
 {
     int rc, val;
-	rc = kstrtoint(buf, 10, &val);
-	if (rc)
-		return -EINVAL;
 
-    if (!!val){
-		cts_enable_gesture_wakeup(g_cts_dev);
-    }
-    else {
-        cts_disable_gesture_wakeup(g_cts_dev);
-    }
+    rc = kstrtoint(buf, 10, &val);
+    if (rc)
+        return -EINVAL;
+
+    lct_cts_tp_gesture_callback(!!val);
 
     return count;
 }
@@ -3363,6 +3360,9 @@ void cts_sysfs_remove_device(struct device *dev)
 
     cts_info("Remove device attr groups");
 
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
+    tp_common_unregister_double_tap_ops();
+#endif
     sysfs_remove_link(NULL, "chipone-tddi");
     /*Low version kernel NOT support sysfs_remove_groups() */
     for (i = 0; cts_dev_attr_groups[i]; i++)

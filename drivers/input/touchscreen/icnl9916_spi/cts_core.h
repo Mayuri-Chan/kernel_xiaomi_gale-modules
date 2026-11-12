@@ -871,6 +871,8 @@ extern int cts_enable_proximity_mode(struct cts_device *cts_dev);
 extern int cts_exit_proximity_mode(struct cts_device *cts_dev);
 extern void set_prox_lcd_reset_gpio_keep_high4(bool en);
 extern void set_lcd_reset_gpio_keep_high_4th(bool en);
+extern void cts_doubleclick_enable(struct device *dev, int en);
+extern int lct_cts_tp_gesture_callback(bool enable_tp);
 extern int ps_send_touch_event(int32_t data);
 
 #endif /* CTS_CORE_H */

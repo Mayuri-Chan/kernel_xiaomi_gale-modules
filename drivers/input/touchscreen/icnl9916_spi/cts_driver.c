@@ -12,6 +12,7 @@
 #include "cts_earjack_detect.h"
 #include "cts_oem.h"
 #include "../lct_tp/lct_tp_common.h"
+#include "../lct_tp/lct_tp_gesture.h"
 #include "../xiaomi/xiaomi_touch.h"
 
 extern char touch_lcm_name[64];
@@ -45,6 +46,38 @@ void cts_doubleclick_enable(struct device *dev, int en)
         cts_disable_gesture_wakeup(cts_dev);
     }
     return;
+}
+
+int lct_cts_tp_gesture_callback(bool enable_tp)
+{
+    if (g_cts_data && cts_is_device_suspended(&g_cts_data->cts_dev)) {
+        cts_info("In suspend, not operation gesture mode:%s", enable_tp ? "On" : "Off");
+        return -1;
+    }
+
+    set_lct_tp_gesture_status(enable_tp);
+    set_lcd_reset_gpio_keep_high_4th(enable_tp);
+    cts_gesture_flag = enable_tp;
+    if (g_cts_data && g_cts_data->device) {
+        cts_doubleclick_enable(g_cts_data->device, enable_tp);
+    }
+    return 0;
+}
+
+static int cts_set_mode_value(int Mode, int value)
+{
+    if (Mode == Touch_Doubletap_Mode) {
+        lct_cts_tp_gesture_callback(!!value);
+        return 0;
+    }
+    return -EINVAL;
+}
+
+static int cts_get_mode_value(int Mode, int value_type)
+{
+    if (Mode == Touch_Doubletap_Mode)
+        return cts_gesture_flag ? 1 : 0;
+    return -EINVAL;
 }
 
 int cts_suspend(struct chipone_ts_data *cts_data)
@@ -403,6 +436,8 @@ static int cts_driver_probe(struct spi_device *client)
 
     memset(&xiaomi_touch_interfaces, 0, sizeof(struct xiaomi_touch_interface));
     xiaomi_touch_interfaces.palm_sensor_write = cts_palm_sensor_write;
+    xiaomi_touch_interfaces.setModeValue = cts_set_mode_value;
+    xiaomi_touch_interfaces.getModeValue = cts_get_mode_value;
     xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
 
     ret = cts_oem_init(cts_data);
@@ -429,7 +464,7 @@ static int cts_driver_probe(struct spi_device *client)
 #endif
 
     tp_select_proximity = 4;
-
+    init_lct_tp_gesture(lct_cts_tp_gesture_callback);
 
     return 0;
 
@@ -541,6 +576,7 @@ static int cts_driver_remove(struct spi_device *client)
 
         cts_tool_deinit(cts_data);
 
+        uninit_lct_tp_gesture();
         cts_sysfs_remove_device(&client->dev);
 
         cts_deinit_esd_protection(cts_data);

@@ -118,6 +118,22 @@ int lct_fts_tp_gesture_callback(bool enable_tp)
     return 0;
 }
 
+static int fts_set_mode_value(int Mode, int value)
+{
+    if (Mode == Touch_Doubletap_Mode) {
+        lct_fts_tp_gesture_callback(!!value);
+        return 0;
+    }
+    return -EINVAL;
+}
+
+static int fts_get_mode_value(int Mode, int value_type)
+{
+    if (Mode == Touch_Doubletap_Mode)
+        return fts_gesture_flag ? 1 : 0;
+    return -EINVAL;
+}
+
 int fts_palm_sensor_cmd(int value)
 {
     int ret = 0;
@@ -192,18 +208,46 @@ int fts_proximity_recovery(struct fts_ts_data *ts_data)
 int fts_set_proximity_switch(int proximity_switch)
 {
     int ret = 0;
+    struct fts_ts_data *ts_data = fts_data;
+
 	FTS_DEBUG("set proximity switch: %d, touch_lcm_name=%s\n", proximity_switch, touch_lcm_name);
 	if ((strcmp(touch_lcm_name, "dsi_panel_c3uv_35_03_0b_vdo")) != 0) {
         FTS_ERROR("No lcm, setting disabled!\n");
 	    return -1;
     }
 
-    mutex_lock(&fts_data->input_dev->mutex);
+    if (!ts_data || !ts_data->input_dev) {
+        FTS_ERROR("ts_data or input_dev is NULL!\n");
+        return -EINVAL;
+    }
+
+    mutex_lock(&ts_data->input_dev->mutex);
     ret = fts_enter_proximity_mode(proximity_switch);
     if (ret < 0) {
         FTS_ERROR("fts set proximity swith is error!");
     }
-    mutex_unlock(&fts_data->input_dev->mutex);
+#if FTS_PSENSOR_ENABLE
+    if (!proximity_switch && ts_data->suspended && fts_proximity_suspend_flag) {
+        FTS_INFO("proximity switch turned off while suspended, entering gesture/sleep suspend");
+        fts_proximity_suspend_flag = false;
+        if (ts_data->gesture_support) {
+            fts_gesture_suspend(ts_data);
+        } else {
+            fts_irq_disable();
+            FTS_INFO("make TP enter into sleep mode");
+            ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
+            if (ret < 0)
+                FTS_ERROR("set TP to sleep mode fail, ret=%d", ret);
+        }
+    } else if (proximity_switch && ts_data->suspended && !fts_proximity_suspend_flag) {
+        FTS_INFO("proximity switch turned on while suspended, exiting gesture for proximity");
+        if (ts_data->gesture_support) {
+            fts_gesture_resume(ts_data);
+        }
+        fts_proximity_suspend_flag = true;
+    }
+#endif
+    mutex_unlock(&ts_data->input_dev->mutex);
     return ret;
 }
 EXPORT_SYMBOL_GPL(fts_set_proximity_switch);
@@ -989,10 +1033,17 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     /*gesture*/
     if (ts_data->suspended && ts_data->gesture_support) {
         ret = fts_read_reg(FTS_REG_GESTURE_EN, &gesture_en);
-        if ((ret >= 0) && (gesture_en == ENABLE))
+        if ((ret >= 0) && (gesture_en == ENABLE)) {
             return TOUCH_GESTURE;
-        else
-            FTS_DEBUG("gesture not enable in fw, don't process gesture");
+        } else {
+            FTS_INFO("gesture not enable in fw while suspended, recovering gesture");
+            fts_gesture_recovery(ts_data);
+            return TOUCH_IGNORE;
+        }
+    }
+
+    if (ts_data->suspended) {
+        return TOUCH_IGNORE;
     }
 
     if ((touch_buf[1] == 0xFF) && (touch_buf[2] == 0xFF)
@@ -1937,6 +1988,23 @@ static int fts_ts_suspend(struct device *dev)
 
     FTS_FUNC_ENTER();
     if (ts_data->suspended) {
+        if (ts_data->gesture_support) {
+            u8 val = 0;
+            ret = fts_read_reg(FTS_REG_GESTURE_EN, &val);
+            if (ret >= 0 && val == ENABLE) {
+                FTS_INFO("Already in suspend state with gesture enabled");
+                return 0;
+            }
+#if FTS_PSENSOR_ENABLE
+            if (fts_proximity_data.mode == ENABLE) {
+                FTS_INFO("Already in suspend state with proximity enabled");
+                return 0;
+            }
+#endif
+            FTS_INFO("Suspended but gesture not enabled, entering gesture suspend");
+            fts_gesture_suspend(ts_data);
+            return 0;
+        }
         FTS_INFO("Already in suspend state");
         return 0;
     }
@@ -1948,6 +2016,7 @@ static int fts_ts_suspend(struct device *dev)
 
 #if FTS_PSENSOR_ENABLE
     if (!fts_proximity_suspend()) {
+        FTS_INFO("Proximity enabled, deferring gesture suspend");
         fts_proximity_suspend_flag = true;
         fts_release_all_finger();
         ts_data->suspended = true;
@@ -2106,7 +2175,7 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
             flush_workqueue(fts_data->ts_workqueue);
             queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
         } else if ((blank_enum[0] == blank_value) && (event_enum[0] == event)) {
-            cancel_work_sync(&fts_data->resume_work);
+            flush_workqueue(fts_data->ts_workqueue);
             fts_ts_suspend(ts_data->dev);
         } else {
             FTS_DEBUG("notifier,event:%lu,blank:%d, not care", event, blank_value);
@@ -2220,6 +2289,8 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 
     memset(&xiaomi_touch_interfaces, 0, sizeof(struct xiaomi_touch_interface));
     xiaomi_touch_interfaces.palm_sensor_write = fts_palm_sensor_write;
+    xiaomi_touch_interfaces.setModeValue = fts_set_mode_value;
+    xiaomi_touch_interfaces.getModeValue = fts_get_mode_value;
     xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
 
 #if FTS_PSENSOR_ENABLE

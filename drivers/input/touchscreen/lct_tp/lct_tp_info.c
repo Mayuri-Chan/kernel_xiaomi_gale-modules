@@ -268,6 +268,9 @@ int init_lct_tp_lockdown_info(void)
         return -ENOMEM;
     }
 
+    if (IS_ENABLED(CONFIG_MACH_GALE))
+        return 0;
+
     lct_tp_p_ld->proc_entry_tp_lockdown_info = proc_create_data(TP_LOCKDOWN_INFO_NAME, 0444, NULL, &lct_proc_tp_lockdown_info_fops, NULL);
     if (IS_ERR_OR_NULL(lct_tp_p_ld->proc_entry_tp_lockdown_info))
     {

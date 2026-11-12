@@ -18,7 +18,7 @@ touchscreen_usb_plugin_data_t g_touchscreen_usb_pulgin;
 EXPORT_SYMBOL_GPL(g_touchscreen_usb_pulgin);
 
 static struct kobject *touchpanel_kobj;
-static struct kobj_attribute double_tap_attr = __ATTR(double_tap, 0644, NULL, NULL);
+static struct kobj_attribute double_tap_attr = __ATTR(double_tap, 0664, NULL, NULL);
 static DEFINE_MUTEX(touchpanel_lock);
 static bool usb_notifier_registered;
 
@@ -73,12 +73,25 @@ int tp_common_set_double_tap_ops(struct tp_common_ops *ops)
 	if (ret) {
 		kobject_put(touchpanel_kobj);
 		touchpanel_kobj = NULL;
+		goto unlock;
 	}
 unlock:
 	mutex_unlock(&touchpanel_lock);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(tp_common_set_double_tap_ops);
+
+void tp_common_unregister_double_tap_ops(void)
+{
+	mutex_lock(&touchpanel_lock);
+	if (touchpanel_kobj) {
+		sysfs_remove_file(touchpanel_kobj, &double_tap_attr.attr);
+		kobject_put(touchpanel_kobj);
+		touchpanel_kobj = NULL;
+	}
+	mutex_unlock(&touchpanel_lock);
+}
+EXPORT_SYMBOL_GPL(tp_common_unregister_double_tap_ops);
 
 int ps_send_touch_event(int32_t data)
 {
@@ -184,13 +197,7 @@ void lct_remove_procfs(void)
 	}
 	WRITE_ONCE(g_touchscreen_usb_pulgin.valid, false);
 	WRITE_ONCE(g_touchscreen_usb_pulgin.event_callback, NULL);
-	mutex_lock(&touchpanel_lock);
-	if (touchpanel_kobj) {
-		sysfs_remove_file(touchpanel_kobj, &double_tap_attr.attr);
-		kobject_put(touchpanel_kobj);
-		touchpanel_kobj = NULL;
-	}
-	mutex_unlock(&touchpanel_lock);
+	tp_common_unregister_double_tap_ops();
 	uninit_lct_tp_proximity_switch();
 	uninit_lct_tp_grip_area();
 	uninit_lct_tp_selftest();

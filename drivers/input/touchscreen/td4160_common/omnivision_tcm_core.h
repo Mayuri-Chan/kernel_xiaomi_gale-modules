@@ -631,6 +631,8 @@ void ovt_tcm_bus_exit(void);
 
 int ovt_tcm_add_module(struct ovt_tcm_module_cb *mod_cb, bool insert);
 
+int lct_ovt_tp_gesture_callback(bool enable_tp);
+
 int touch_init(struct ovt_tcm_hcd *tcm_hcd);
 int touch_remove(struct ovt_tcm_hcd *tcm_hcd);
 int touch_reinit(struct ovt_tcm_hcd *tcm_hcd);

@@ -34,8 +34,13 @@
 #include <linux/regulator/consumer.h>
 #include "omnivision_tcm_core.h"
 #include "../lct_tp/lct_tp_common.h"
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
+#include "../lct_tp/tp_common.h"
+#endif
+#include "../lct_tp/lct_tp_gesture.h"
 #include "../xiaomi/xiaomi_touch.h"
 
+extern void set_lcd_reset_gpio_keep_high_3rd(bool enable);
 extern void set_prox_lcd_reset_gpio_keep_high3(bool enable);
 
 /* #define RESET_ON_RESUME */
@@ -288,9 +293,87 @@ static int lct_ovt_tp_get_screen_angle_callback(void)
 	return 1;
 }
 
+int lct_ovt_tp_gesture_callback(bool enable_tp)
+{
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+
+	if (tcm_hcd && tcm_hcd->in_suspend) {
+		LOGI(tcm_hcd->pdev->dev.parent,
+				"In suspend, not operation gesture mode:%s\n",
+				enable_tp ? "On" : "Off");
+		return -1;
+	}
+
+	set_lct_tp_gesture_status(enable_tp);
+	set_lcd_reset_gpio_keep_high_3rd(enable_tp);
+	if (tcm_hcd)
+		tcm_hcd->wakeup_gesture_enabled = enable_tp;
+	return 0;
+}
+EXPORT_SYMBOL(lct_ovt_tp_gesture_callback);
+
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
+static ssize_t double_tap_show(struct kobject *kobj,
+                               struct kobj_attribute *attr, char *buf)
+{
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+	return sprintf(buf, "%d\n", tcm_hcd ? (tcm_hcd->wakeup_gesture_enabled ? 1 : 0) : 0);
+}
+
+static ssize_t double_tap_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, const char *buf,
+                                size_t count)
+{
+	int rc, val;
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc)
+		return -EINVAL;
+
+	lct_ovt_tp_gesture_callback(!!val);
+
+	return count;
+}
+
+static struct tp_common_ops double_tap_ops = {
+	.show = double_tap_show,
+	.store = double_tap_store,
+};
+#endif
+
+static int ovt_set_mode_value(int Mode, int value)
+{
+	if (Mode == Touch_Doubletap_Mode) {
+		lct_ovt_tp_gesture_callback(!!value);
+		return 0;
+	}
+	return -EINVAL;
+}
+
+static int ovt_get_mode_value(int Mode, int value_type)
+{
+	if (Mode == Touch_Doubletap_Mode) {
+		struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+		return (tcm_hcd && tcm_hcd->wakeup_gesture_enabled) ? 1 : 0;
+	}
+	return -EINVAL;
+}
+
 static void ovt_lct_tp_init(struct ovt_tcm_hcd *tcm_hcd)
 {
 	int retval;
+
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
+	retval = tp_common_set_double_tap_ops(&double_tap_ops);
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"Failed to create double_tap node err=%d\n", retval);
+#endif
+
+	retval = init_lct_tp_gesture(lct_ovt_tp_gesture_callback);
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"init_lct_tp_gesture Failed! ret = %d\n", retval);
 
 	retval = init_lct_tp_info("[Vendor]unkown,[FW]unkown,[IC]unkown\n");
 	if (retval < 0)
@@ -332,6 +415,10 @@ static void ovt_lct_tp_uninit(void)
 {
 	g_touchscreen_usb_pulgin.event_callback = NULL;
 	cancel_work_sync(&ovt_usb_plugin_work);
+	uninit_lct_tp_gesture();
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
+	tp_common_unregister_double_tap_ops();
+#endif
 	uninit_lct_tp_work();
 	uninit_lct_tp_proximity_switch();
 	uninit_lct_tp_grip_area();
@@ -4253,7 +4340,7 @@ static int ovt_tcm_probe(struct platform_device *pdev)
 	tcm_hcd->rd_chunk_size = RD_CHUNK_SIZE;
 	tcm_hcd->wr_chunk_size = WR_CHUNK_SIZE;
 	tcm_hcd->is_detected = false;
-	tcm_hcd->wakeup_gesture_enabled = WAKEUP_GESTURE;
+	tcm_hcd->wakeup_gesture_enabled = false;
 
 #ifdef PREDICTIVE_READING
 	tcm_hcd->read_length = MIN_READ_LENGTH;
@@ -4336,6 +4423,8 @@ static int ovt_tcm_probe(struct platform_device *pdev)
 
 	memset(&ovt_xiaomi_touch_interfaces, 0, sizeof(ovt_xiaomi_touch_interfaces));
 	ovt_xiaomi_touch_interfaces.palm_sensor_write = ovt_palm_sensor_write;
+	ovt_xiaomi_touch_interfaces.setModeValue = ovt_set_mode_value;
+	ovt_xiaomi_touch_interfaces.getModeValue = ovt_get_mode_value;
 	xiaomitouch_register_modedata(&ovt_xiaomi_touch_interfaces);
 
 	retval = ovt_tcm_config_gpio(tcm_hcd);

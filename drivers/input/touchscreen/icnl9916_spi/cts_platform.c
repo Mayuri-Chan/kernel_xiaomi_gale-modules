@@ -666,9 +666,11 @@ int cts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 		if (value == WAKEUP_OFF) {
 			set_lcd_reset_gpio_keep_high_4th(false);
 			cts_gesture_flag = false;
+			set_lct_tp_gesture_status(false);
 		} else if (value == WAKEUP_ON) {
 			set_lcd_reset_gpio_keep_high_4th(true);
 			cts_gesture_flag = true;
+			set_lct_tp_gesture_status(true);
 		}
 	}
     printk("Enter %s(%d):type=%u,code=%u,value=%d, cts_gesture_flag=%d\n", __func__, __LINE__,

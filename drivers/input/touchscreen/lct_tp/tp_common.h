@@ -11,5 +11,6 @@ struct tp_common_ops {
 };
 
 int tp_common_set_double_tap_ops(struct tp_common_ops *ops);
+void tp_common_unregister_double_tap_ops(void);
 
 #endif

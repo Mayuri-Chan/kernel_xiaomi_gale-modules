@@ -32,6 +32,7 @@
 #include <linux/interrupt.h>
 #include "omnivision_tcm_core.h"
 #include "../lct_tp/lct_tp_common.h"
+#include "../lct_tp/lct_tp_gesture.h"
 #include "../xiaomi/xiaomi_touch.h"
 
 #define WAKEUP_OFF 4
@@ -909,9 +910,9 @@ static int ovt_gesture_switch(struct input_dev *dev,
 {
 	if (type == EV_SYN && code == SYN_CONFIG) {
 		if (value == WAKEUP_OFF)
-			set_lcd_reset_gpio_keep_high_3rd(false);
+			lct_ovt_tp_gesture_callback(false);
 		else if (value == WAKEUP_ON)
-			set_lcd_reset_gpio_keep_high_3rd(true);
+			lct_ovt_tp_gesture_callback(true);
 	}
 	printk("Enter %s(%d):type=%u,code=%u,value=%d\n",
 			__func__, __LINE__, type, code, value);

@@ -33,8 +33,9 @@
 * 1.Included header files
 *****************************************************************************/
 #include "focaltech_core.h"
-#ifdef CONFIG_TOUCHSCREEN_COMMON
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
 #include "../lct_tp/tp_common.h"
+#include "../lct_tp/lct_tp_gesture.h"
 #endif
 
 /******************************************************************************
@@ -102,7 +103,7 @@ static struct fts_gesture_st fts_gesture_data;
 /*****************************************************************************
 * Static function prototypes
 *****************************************************************************/
-#ifdef CONFIG_TOUCHSCREEN_COMMON
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
 static ssize_t double_tap_show(struct kobject *kobj,
                                struct kobj_attribute *attr, char *buf)
 {
@@ -130,6 +131,7 @@ static ssize_t double_tap_store(struct kobject *kobj,
         ts_data->gesture_support = DISABLE;
         fts_gesture_flag = false;
     }
+    set_lct_tp_gesture_status(fts_gesture_flag);
     mutex_unlock(&ts_data->input_dev->mutex);
 
     return count;
@@ -296,7 +298,7 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 {
     int gesture;
 
-    FTS_DEBUG("gesture_id:0x%x", gesture_id);
+    FTS_INFO("gesture_id:0x%x", gesture_id);
     switch (gesture_id) {
     case GESTURE_LEFT:
         gesture = KEY_GESTURE_LEFT;
@@ -346,7 +348,7 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
     }
     /* report event key */
     if (gesture != -1) {
-        FTS_DEBUG("Gesture Code=%d", gesture);
+        FTS_INFO("Gesture Code=%d (KEY_WAKEUP=%d)", gesture, KEY_WAKEUP);
         input_report_key(input_dev, gesture, 1);
         input_sync(input_dev);
         input_report_key(input_dev, gesture, 0);
@@ -398,8 +400,8 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     memset(gesture->coordinate_y, 0, FTS_GESTURE_POINTS_MAX * sizeof(u16));
     gesture->gesture_id = buf[2];
     gesture->point_num = buf[3];
-    FTS_DEBUG("gesture_id=%d, point_num=%d",
-              gesture->gesture_id, gesture->point_num);
+    FTS_INFO("gesture_id=0x%02x (%d), point_num=%d",
+              gesture->gesture_id, gesture->gesture_id, gesture->point_num);
 
     /* save point data,max:6 */
     for (i = 0; i < FTS_GESTURE_POINTS_MAX; i++) {
@@ -513,10 +515,12 @@ int fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 		if (value == WAKEUP_OFF) {
 			ts_data->gesture_support = DISABLE;
 			fts_gesture_flag = false;
+			set_lct_tp_gesture_status(false);
 			FTS_INFO("gesture disabled:%d", fts_gesture_flag);
 		} else if (value == WAKEUP_ON) {
 			ts_data->gesture_support = ENABLE;
 			fts_gesture_flag = true;
+			set_lct_tp_gesture_status(true);
 			FTS_INFO("fts_gesture_flag:%d", fts_gesture_flag);
 		}
 	}
@@ -527,7 +531,7 @@ int fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 int fts_gesture_init(struct fts_ts_data *ts_data)
 {
     struct input_dev *input_dev = ts_data->input_dev;
-#ifdef CONFIG_TOUCHSCREEN_COMMON
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
     int ret;
 #endif
 
@@ -567,7 +571,7 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
 
     fts_create_gesture_sysfs(ts_data->dev);
     input_dev->event = fts_gesture_switch;
-#ifdef CONFIG_TOUCHSCREEN_COMMON
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
     ret = tp_common_set_double_tap_ops(&double_tap_ops);
     if (ret < 0) {
         FTS_ERROR("%s: Failed to create double_tap node err=%d\n",
@@ -596,6 +600,9 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
 int fts_gesture_exit(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
+    tp_common_unregister_double_tap_ops();
+#endif
     sysfs_remove_group(&ts_data->dev->kobj, &fts_gesture_group);
     FTS_FUNC_EXIT();
     return 0;

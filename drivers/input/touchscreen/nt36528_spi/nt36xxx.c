@@ -1683,6 +1683,7 @@ static int lct_nvt_tp_gesture_callback(bool enable_flag)
 
 	nvt_gesture_flag = enable_flag;
 	set_lcd_reset_gpio_keep_high_1st(enable_flag);
+	set_lct_tp_gesture_status(enable_flag);
 	if (enable_flag)
 		NVT_LOG("enable gesture mode\n");
 	else
@@ -1730,6 +1731,22 @@ static struct tp_common_ops double_tap_ops = {
     .store = double_tap_store
 };
 #endif
+
+static int nvt_set_mode_value(int Mode, int value)
+{
+	if (Mode == Touch_Doubletap_Mode) {
+		lct_nvt_tp_gesture_callback(!!value);
+		return 0;
+	}
+	return -EINVAL;
+}
+
+static int nvt_get_mode_value(int Mode, int value_type)
+{
+	if (Mode == Touch_Doubletap_Mode)
+		return nvt_gesture_flag ? 1 : 0;
+	return -EINVAL;
+}
 #endif
 
 #if LCT_TP_WORK_EN
@@ -1959,6 +1976,10 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 	memset(&xiaomi_touch_interfaces, 0, sizeof(struct xiaomi_touch_interface));
 	xiaomi_touch_interfaces.palm_sensor_write = nvt_palm_sensor_write;
+#if WAKEUP_GESTURE
+	xiaomi_touch_interfaces.setModeValue = nvt_set_mode_value;
+	xiaomi_touch_interfaces.getModeValue = nvt_get_mode_value;
+#endif
 	xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
 
 	ts->client->bits_per_word = 8;
