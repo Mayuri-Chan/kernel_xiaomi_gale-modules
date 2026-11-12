@@ -13,15 +13,27 @@
 #include <drm/drm_panel.h>
 
 #include "dsi_panel_c3uv_bias.h"
+#include "../mediatek/mediatek_v2/mi_disp_esd_check.h"
 #include "../mediatek/mediatek_v2/mtk_drm_graphics_base.h"
 #include "../mediatek/mediatek_v2/mtk_panel_ext.h"
 #include "../mediatek/mediatek_v2/drm_notifier_odm.h"
 
+bool lcd_reset_keep_high_4th;
+EXPORT_SYMBOL(lcd_reset_keep_high_4th);
+bool prox_lcd_reset_keep_high4;
+EXPORT_SYMBOL(prox_lcd_reset_keep_high4);
+
 void set_lcd_reset_gpio_keep_high_4th(bool enable)
 {
-	set_lcd_reset_gpio_keep_high(enable);
+	lcd_reset_keep_high_4th = enable;
 }
 EXPORT_SYMBOL(set_lcd_reset_gpio_keep_high_4th);
+
+void set_prox_lcd_reset_gpio_keep_high4(bool enable)
+{
+	prox_lcd_reset_keep_high4 = enable;
+}
+EXPORT_SYMBOL(set_prox_lcd_reset_gpio_keep_high4);
 
 struct lcm_cmd {
 	u16 delay_ms;
@@ -87,7 +99,6 @@ struct lcm {
 	struct mipi_dsi_device *dsi;
 	const struct lcm_desc *desc;
 	struct gpio_desc *reset, *enp, *enn;
-	struct regmap *bias;
 	struct mtk_panel_params params;
 	bool prepared;
 };
@@ -149,15 +160,16 @@ static int lcm_prepare(struct drm_panel *panel)
 	struct lcm *ctx = to_lcm(panel);
 	int ret;
 
+	WRITE_ONCE(esd_panel_dead, false);
 	if (ctx->prepared)
 		return 0;
 
 	gpiod_set_value_cansleep(ctx->enp, 1);
-	ret = regmap_write(ctx->bias, 0, 0x14);
-	if (ret)
+	ret = lcd_bias_write_bytes(0x00, 0x14);
+	if (ret < 0)
 		goto power_off;
-	ret = regmap_write(ctx->bias, 1, 0x14);
-	if (ret)
+	ret = lcd_bias_write_bytes(0x01, 0x14);
+	if (ret < 0)
 		goto power_off;
 
 	usleep_range(5000, 6000);
@@ -186,25 +198,39 @@ power_off:
 
 static int lcm_unprepare(struct drm_panel *panel)
 {
+	static const u8 pre_off[] = { 0x6d, 0x25, 0x00 };
 	static const u8 display_off[] = { 0x28, 0x00, 0x00 };
+	static const u8 sleep_in[] = { 0x10, 0x00, 0x00 };
+	static const struct lcm_cmd post_sleep[] = {
+		{ .len = 9, .data = { 0xbb, 0x01, 0x02, 0x03, 0x0a, 0x04, 0x13, 0x14, 0x00 } },
+		{ .len = 3, .data = { 0xf1, 0x5a, 0x59 } },
+		{ .len = 3, .data = { 0xf0, 0xa5, 0xa6 } },
+	};
 	struct lcm *ctx = to_lcm(panel);
-	bool keep_reset;
-	int ret = 0;
+	int ret;
 
 	if (!ctx->prepared)
 		return 0;
-	lcm_notify(DRM_BLANK_POWERDOWN);
-	keep_reset = READ_ONCE(lcd_reset_keep_high);
-	if (keep_reset) {
-		ret = lcm_write(ctx, display_off, sizeof(display_off));
-		msleep(20);
-	} else {
-		ret = lcm_push(ctx, ctx->desc->sleep, ctx->desc->sleep_count);
-	}
 
-	if (!keep_reset && !READ_ONCE(lcd_gesture_mode))
-		lcm_power_off(ctx);
+	lcm_notify(DRM_BLANK_POWERDOWN);
+	if (!READ_ONCE(prox_lcd_reset_keep_high4))
+		lcm_write(ctx, pre_off, sizeof(pre_off));
+
+	ret = lcm_write(ctx, display_off, sizeof(display_off));
+	msleep(20);
 	ctx->prepared = false;
+
+	if (READ_ONCE(prox_lcd_reset_keep_high4) && !READ_ONCE(esd_panel_dead))
+		return ret;
+
+	ret = lcm_write(ctx, sleep_in, sizeof(sleep_in));
+	msleep(120);
+	lcm_push(ctx, post_sleep, ARRAY_SIZE(post_sleep));
+
+	if (READ_ONCE(lcd_reset_keep_high_4th) && !READ_ONCE(esd_panel_dead))
+		return ret;
+
+	lcm_power_off(ctx);
 	return ret;
 }
 
@@ -239,16 +265,30 @@ static int lcm_setbacklight_cmdq(void *dsi, dcs_write_gce cb,
 			  void *handle, unsigned int level)
 {
 	u8 cmd[] = { 0x51, 0, 0 };
+	unsigned int bl;
 
 	if (!cb)
 		return -EINVAL;
 
-	level = min(level, 2047U);
-	level = level * 77 / 100;
-	if (level && level <= 7)
-		level = 7;
-	cmd[1] = level >> 8;
-	cmd[2] = level & 0xff;
+	if (level == 0)
+		bl = 0;
+	else if (level <= 16)
+		bl = 6;
+	else if (level <= 2047)
+		bl = level * 77 / 100;
+	else if (level <= 2549)
+		bl = (level * 157000 / 503 + 937336) / 1000;
+	else if (level <= 2999)
+		bl = (level * 157000 / 450 + 845600) / 1000;
+	else if (level <= 3899)
+		bl = (level * 157000 / 900 + 1368000) / 1000;
+	else if (level <= 4095)
+		bl = 2047;
+	else
+		bl = level;
+
+	cmd[1] = (bl >> 8) & 0xff;
+	cmd[2] = bl & 0xff;
 	cb(dsi, handle, cmd, sizeof(cmd));
 	return 0;
 }
@@ -346,10 +386,6 @@ static int lcm_probe(struct mipi_dsi_device *dsi)
 	ctx->dsi = dsi;
 	ctx->desc = desc;
 	mipi_dsi_set_drvdata(dsi, ctx);
-	ctx->bias = lcd_bias_get_regmap(dev);
-	ret = PTR_ERR_OR_ZERO(ctx->bias);
-	if (ret)
-		return dev_err_probe(dev, ret, "LCD bias unavailable\n");
 
 	ctx->reset = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
 	if (IS_ERR(ctx->reset))
@@ -396,6 +432,7 @@ static int lcm_probe(struct mipi_dsi_device *dsi)
 	ret = mipi_dsi_attach(dsi);
 	if (ret)
 		goto remove_panel;
+	mtk_panel_tch_handle_reg(&ctx->panel);
 	ret = mtk_panel_ext_create(dev, &ctx->params,
 		&lcm_ext_funcs, &ctx->panel);
 	if (ret)

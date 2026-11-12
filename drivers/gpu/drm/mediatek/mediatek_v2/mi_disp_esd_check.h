@@ -7,6 +7,8 @@
 #ifndef _MI_DISP_ESD_CHECK_H
 #define _MI_DISP_ESD_CHECK_H
 
+struct drm_crtc;
+
 struct mi_esd_ctx {
 	struct task_struct *disp_esd_irq_chk_task;
 	struct task_struct *disp_esd_irq_enable_task;
@@ -21,8 +23,16 @@ struct mi_esd_ctx {
 	bool panel_init;
 };
 
+extern bool esd_panel_dead;
+extern bool nvt_ts_esd_resume_probe;
+extern int (*lcd_nvt_ts_esd_resume)(void);
+extern int (*lcd_nvt_ts_esd_suspend)(void);
+extern bool foc_ts_esd_resume_probe;
+extern bool foc_ts_need_do_esd_recovery;
+
 void mi_disp_esd_chk_init(struct drm_crtc *crtc);
 void mi_disp_esd_chk_deinit(struct drm_crtc *crtc);
 void mi_disp_err_flag_esd_check_switch(struct drm_crtc *crtc, bool enable);
 void mi_disp_err_enable_esd_irq(struct drm_crtc *crtc);
+void foc_tp_notify_lcd_esd(void);
 #endif

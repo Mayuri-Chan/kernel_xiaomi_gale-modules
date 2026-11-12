@@ -13,6 +13,7 @@
 #include <drm/drm_panel.h>
 
 #include "dsi_panel_c3uv_bias.h"
+#include "../mediatek/mediatek_v2/mi_disp_esd_check.h"
 #include "../mediatek/mediatek_v2/mtk_drm_graphics_base.h"
 #include "../mediatek/mediatek_v2/mtk_panel_ext.h"
 #include "../mediatek/mediatek_v2/drm_notifier_odm.h"
@@ -144,16 +145,26 @@ struct lcm {
 	struct mipi_dsi_device *dsi;
 	const struct lcm_desc *desc;
 	struct gpio_desc *reset, *enp, *enn;
-	struct regmap *bias;
 	struct mtk_panel_params params;
 	bool prepared;
 };
 
+bool lcd_reset_keep_high_1st;
+EXPORT_SYMBOL(lcd_reset_keep_high_1st);
+bool prox_lcd_reset_keep_high1;
+EXPORT_SYMBOL(prox_lcd_reset_keep_high1);
+
 void set_lcd_reset_gpio_keep_high_1st(bool enable)
 {
-	set_lcd_reset_gpio_keep_high(enable);
+	lcd_reset_keep_high_1st = enable;
 }
 EXPORT_SYMBOL(set_lcd_reset_gpio_keep_high_1st);
+
+void set_prox_lcd_reset_gpio_keep_high1(bool enable)
+{
+	prox_lcd_reset_keep_high1 = enable;
+}
+EXPORT_SYMBOL(set_prox_lcd_reset_gpio_keep_high1);
 
 static struct lcm *to_lcm(struct drm_panel *panel)
 {
@@ -212,15 +223,16 @@ static int lcm_prepare(struct drm_panel *panel)
 	struct lcm *ctx = to_lcm(panel);
 	int ret;
 
+	esd_panel_dead = false;
 	if (ctx->prepared)
 		return 0;
 
 	gpiod_set_value_cansleep(ctx->enp, 1);
-	ret = regmap_write(ctx->bias, 0, 0x14);
-	if (ret)
+	ret = lcd_bias_write_bytes(0x00, 0x14);
+	if (ret < 0)
 		goto power_off;
-	ret = regmap_write(ctx->bias, 1, 0x14);
-	if (ret)
+	ret = lcd_bias_write_bytes(0x01, 0x14);
+	if (ret < 0)
 		goto power_off;
 
 	usleep_range(3000, 4000);
@@ -250,24 +262,27 @@ power_off:
 static int lcm_unprepare(struct drm_panel *panel)
 {
 	static const u8 display_off[] = { 0x28 };
+	static const u8 sleep_in[] = { 0x10 };
 	struct lcm *ctx = to_lcm(panel);
-	bool keep_reset;
-	int ret = 0;
+	int ret;
 
 	if (!ctx->prepared)
 		return 0;
-	lcm_notify(DRM_BLANK_POWERDOWN);
-	keep_reset = READ_ONCE(lcd_reset_keep_high);
-	if (keep_reset) {
-		ret = lcm_write(ctx, display_off, sizeof(display_off));
-		msleep(20);
-	} else {
-		ret = lcm_push(ctx, ctx->desc->sleep, ctx->desc->sleep_count);
-	}
 
-	if (!keep_reset && !READ_ONCE(lcd_gesture_mode))
-		lcm_power_off(ctx);
+	lcm_notify(DRM_BLANK_POWERDOWN);
+	ret = lcm_write(ctx, display_off, sizeof(display_off));
+	msleep(20);
 	ctx->prepared = false;
+
+	if (READ_ONCE(prox_lcd_reset_keep_high1) && !READ_ONCE(esd_panel_dead))
+		return ret;
+
+	ret = lcm_write(ctx, sleep_in, sizeof(sleep_in));
+	if (READ_ONCE(lcd_reset_keep_high_1st) && !READ_ONCE(esd_panel_dead))
+		return ret;
+
+	msleep(120);
+	lcm_power_off(ctx);
 	return ret;
 }
 
@@ -302,16 +317,30 @@ static int lcm_setbacklight_cmdq(void *dsi, dcs_write_gce cb,
 			  void *handle, unsigned int level)
 {
 	u8 cmd[] = { 0x51, 0, 0 };
+	unsigned int bl;
 
 	if (!cb)
 		return -EINVAL;
 
-	level = min(level, 2047U);
-	if (level && level <= 8)
-		level = 8;
-	level = level * 77 / 100;
-	cmd[1] = level >> 8;
-	cmd[2] = level & 0xff;
+	if (level == 0)
+		bl = 0;
+	else if (level <= 16)
+		bl = 6;
+	else if (level <= 2047)
+		bl = level * 77 / 100;
+	else if (level <= 2549)
+		bl = (level * 157000 / 503 + 937336) / 1000;
+	else if (level <= 2999)
+		bl = (level * 157000 / 450 + 845600) / 1000;
+	else if (level <= 3899)
+		bl = (level * 157000 / 900 + 1368000) / 1000;
+	else if (level <= 4095)
+		bl = 2047;
+	else
+		bl = level;
+
+	cmd[1] = (bl >> 8) & 0xff;
+	cmd[2] = bl & 0xff;
 	cb(dsi, handle, cmd, sizeof(cmd));
 	return 0;
 }
@@ -409,10 +438,6 @@ static int lcm_probe(struct mipi_dsi_device *dsi)
 	ctx->dsi = dsi;
 	ctx->desc = desc;
 	mipi_dsi_set_drvdata(dsi, ctx);
-	ctx->bias = lcd_bias_get_regmap(dev);
-	ret = PTR_ERR_OR_ZERO(ctx->bias);
-	if (ret)
-		return dev_err_probe(dev, ret, "LCD bias unavailable\n");
 
 	ctx->reset = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
 	if (IS_ERR(ctx->reset))
@@ -459,6 +484,7 @@ static int lcm_probe(struct mipi_dsi_device *dsi)
 	ret = mipi_dsi_attach(dsi);
 	if (ret)
 		goto remove_panel;
+	mtk_panel_tch_handle_reg(&ctx->panel);
 	ret = mtk_panel_ext_create(dev, &ctx->params,
 		&lcm_ext_funcs, &ctx->panel);
 	if (ret)

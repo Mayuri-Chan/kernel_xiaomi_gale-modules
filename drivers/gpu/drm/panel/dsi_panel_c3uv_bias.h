@@ -7,14 +7,6 @@
 struct device;
 struct regmap;
 
-extern bool lcd_reset_keep_high;
-extern bool lcd_gesture_mode;
-
-void set_lcd_reset_gpio_keep_high(bool enable);
-void set_lcd_reset_gpio_keep_high_1st(bool enable);
-void set_lcd_reset_gpio_keep_high_3rd(bool enable);
-void set_lcd_reset_gpio_keep_high_4th(bool enable);
-void set_lcd_gesture_mode(bool enable);
-struct regmap *lcd_bias_get_regmap(struct device *dev);
+int lcd_bias_write_bytes(unsigned char addr, unsigned char value);
 
 #endif
