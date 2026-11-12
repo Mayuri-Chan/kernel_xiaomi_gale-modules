@@ -441,6 +441,13 @@
 #define MAX96712A2MIPI_SENSOR_ID  0xA2
 #define MAX96712A3MIPI_SENSOR_ID  0xA3
 #define LT7911_SENSOR_ID  0x1605
+#define S5KJNS_SUNNY_MAIN_II_SENSOR_ID          0x38ef
+#define S5KJNS_TRULY_MAIN_III_SENSOR_ID         (0x38ef+1)
+#define OV50D40_TRULY_MAIN_I_SENSOR_ID          0x565044
+#define OV8856_AAC_FRONT_I_SENSOR_ID            0x885A
+#define OV8856_TRULY_FRONT_II_SENSOR_ID         0x885B
+#define SC202CS_SUNNY_MARCO_I_SENSOR_ID         0xeb53
+#define SC202CS_AAC_MARCO_II_SENSOR_ID          0xeb52
 /* CAMERA DRIVER NAME */
 #define CAMERA_HW_DEVNAME                       "kd_camera_hw"
 /* SENSOR DEVICE DRIVER NAME */
@@ -712,6 +719,13 @@
 #define SENSOR_DRVNAME_MAX96712A2_MIPI_YUV        "max96712a2_mipi_yuv"
 #define SENSOR_DRVNAME_MAX96712A3_MIPI_YUV        "max96712a3_mipi_yuv"
 #define SENSOR_DRVNAME_LT7911_MIPI_YUV        "lt7911_mipi_yuv"
+#define SENSOR_DRVNAME_S5KJNS_SUNNY_MAIN_II_MIPI_RAW        "s5kjns_sunny_main_ii_mipi_raw"
+#define SENSOR_DRVNAME_S5KJNS_TRULY_MAIN_III_MIPI_RAW       "s5kjns_truly_main_iii_mipi_raw"
+#define SENSOR_DRVNAME_OV50D40_TRULY_MAIN_I_MIPI_RAW        "ov50d40_truly_main_i_mipi_raw"
+#define SENSOR_DRVNAME_OV8856_AAC_FRONT_I_MIPI_RAW          "ov8856_aac_front_i_mipi_raw"
+#define SENSOR_DRVNAME_OV8856_TRULY_FRONT_II_MIPI_RAW       "ov8856_truly_front_ii_mipi_raw"
+#define SENSOR_DRVNAME_SC202CS_SUNNY_MARCO_I_MIPI_RAW       "sc202cs_sunny_marco_i_mipi_raw"
+#define SENSOR_DRVNAME_SC202CS_AAC_MARCO_II_MIPI_RAW        "sc202cs_aac_marco_ii_mipi_raw"
 /************************************
  * I3C SENSOR PID (TOTAL 48-BITS)
  ************************************/
