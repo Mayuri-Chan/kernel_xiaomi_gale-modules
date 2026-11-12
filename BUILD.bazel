@@ -92,5 +92,7 @@ define_mgk(
     device_user_modules = mgk_64_device_user_modules,
     platform_device_user_modules = mgk_64_platform_device_user_modules,
     symbol_list = mgk_kmi_symbol_list,
-    dtb_files = ["gale.dtb"],
+    dtb_files = ["gale.dtb", "gale-overlay.dtbo"],
+    dtbo_config = "//kernel_device_modules-6.6/arch/arm64/boot/dts:dtbo.cfg",
+    build_dtbo_image = True,
 )

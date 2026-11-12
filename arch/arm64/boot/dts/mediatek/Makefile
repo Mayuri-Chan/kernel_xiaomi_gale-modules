@@ -14,3 +14,4 @@ DTC_INCLUDE += $(dir $(src))
 DTC_FLAGS += -@
 
 dtb-$(CONFIG_MACH_GALE) += gale.dtb
+dtb-$(CONFIG_MACH_GALE) += gale-overlay.dtbo
