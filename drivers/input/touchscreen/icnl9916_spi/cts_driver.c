@@ -12,13 +12,15 @@
 #include "cts_earjack_detect.h"
 #include "cts_oem.h"
 #include "../lct_tp/lct_tp_common.h"
+#include "../xiaomi/xiaomi_touch.h"
 
 extern char touch_lcm_name[64];
 static void cts_resume_work_func(struct work_struct *work);
 
+static struct xiaomi_touch_interface xiaomi_touch_interfaces;
 
-#ifdef CFG_CTS_DRM_NOTIFIER
-#include "drm_notifier_odm.h"
+#ifdef CONFIG_CTS_PM_FB_NOTIFIER
+#include "mtk_disp_notify.h"
 #endif
 bool cts_show_debug_log;
 #ifdef CTS_MTK_GET_PANEL
@@ -132,66 +134,31 @@ static void cts_resume_work_func(struct work_struct *work)
 }
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
-#ifdef CFG_CTS_DRM_NOTIFIER
 static int fb_notifier_callback(struct notifier_block *nb,
         unsigned long action, void *data)
 {
-    const struct cts_platform_data *pdata =
-    container_of(nb, struct cts_platform_data, fb_notifier);
+    struct cts_platform_data *pdata =
+        container_of(nb, struct cts_platform_data, fb_notifier);
     struct chipone_ts_data *cts_data =
-    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
-    struct drm_notifier_data *evdata = data;
-    int *blank = evdata ? evdata->data : NULL;
+        container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
+    int *blank = (int *)data;
 
     cts_info("FB notifier callback");
-    if (action != DRM_EVENT_BLANK || !blank ||
-        evdata->id != MSM_DRM_PRIMARY_DISPLAY)
+    if (!blank)
         return NOTIFY_DONE;
 
-    cts_info("action=%lu, blank=%d\n", action, *blank);
-
-    if (*blank == DRM_BLANK_POWERDOWN) {
+    if (action == MTK_DISP_EARLY_EVENT_BLANK &&
+        *blank == MTK_DISP_BLANK_POWERDOWN) {
         cts_suspend(cts_data);
-    } else if (*blank == DRM_BLANK_UNBLANK) {
-        queue_work(cts_data->workqueue,
-            &cts_data->ts_resume_work);
-    }
-
-    return NOTIFY_OK;
-}
-#else
-static int fb_notifier_callback(struct notifier_block *nb,
-        unsigned long action, void *data)
-{
-    volatile int blank;
-    struct cts_platform_data *pdata =
-    container_of(nb, struct cts_platform_data, fb_notifier);
-    struct chipone_ts_data *cts_data =
-    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
-    struct fb_event *evdata = data;
-
-    cts_info("FB notifier callback");
-
-    if (evdata && evdata->data) {
-        if (action == FB_EVENT_BLANK) {
-            blank = *(int *)evdata->data;
-            if (blank == FB_BLANK_UNBLANK) {
-                queue_work(cts_data->workqueue,
-                    &cts_data->ts_resume_work);
-                return NOTIFY_OK;
-            }
-        } else if (action == FB_EARLY_EVENT_BLANK) {
-            blank = *(int *)evdata->data;
-            if (blank == FB_BLANK_POWERDOWN) {
-                cts_suspend(cts_data);
-                return NOTIFY_OK;
-            }
-        }
+        return NOTIFY_OK;
+    } else if (action == MTK_DISP_EVENT_BLANK &&
+        *blank == MTK_DISP_BLANK_UNBLANK) {
+        queue_work(cts_data->workqueue, &cts_data->ts_resume_work);
+        return NOTIFY_OK;
     }
 
     return NOTIFY_DONE;
 }
-#endif
 
 static int cts_init_pm_fb_notifier(struct chipone_ts_data *cts_data)
 {
@@ -199,23 +166,17 @@ static int cts_init_pm_fb_notifier(struct chipone_ts_data *cts_data)
 
     cts_data->pdata->fb_notifier.notifier_call = fb_notifier_callback;
 
-#ifdef CFG_CTS_DRM_NOTIFIER
-    return drm_register_client(&cts_data->pdata->fb_notifier);
-#else
-    return fb_register_client(&cts_data->pdata->fb_notifier);
-#endif
+    return mtk_disp_notifier_register("chipone_ts_notifier",
+        &cts_data->pdata->fb_notifier);
 }
 
 static int cts_deinit_pm_fb_notifier(struct chipone_ts_data *cts_data)
 {
     cts_info("Deinit FB notifier");
-#ifdef CFG_CTS_DRM_NOTIFIER
-    return drm_unregister_client(&cts_data->pdata->fb_notifier);
-#else
-    return fb_unregister_client(&cts_data->pdata->fb_notifier);
-#endif
+
+    return mtk_disp_notifier_unregister(&cts_data->pdata->fb_notifier);
 }
-#endif /* CONFIG_CTS_PM_FB_NOTIFIER */
+#endif
 
 #ifdef CTS_MTK_GET_PANEL
 char panel_name[50] = { 0 };
@@ -335,6 +296,7 @@ static int cts_driver_probe(struct spi_device *client)
     cts_data->cts_dev.pdata = cts_data->pdata;
     cts_data->pdata->cts_dev = &cts_data->cts_dev;
 
+    palm_sensor_cts_data = cts_data;
     g_cts_data = cts_data;
 
     cts_data->workqueue =
@@ -438,6 +400,10 @@ static int cts_driver_probe(struct spi_device *client)
         // Ignore this error
     }
 #endif
+
+    memset(&xiaomi_touch_interfaces, 0, sizeof(struct xiaomi_touch_interface));
+    xiaomi_touch_interfaces.palm_sensor_write = cts_palm_sensor_write;
+    xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
 
     ret = cts_oem_init(cts_data);
     if (ret < 0) {
@@ -934,6 +900,8 @@ static struct spi_driver cts_spi_driver = {
     .id_table = cts_device_id_table,
 };
 
+static bool cts_driver_registered;
+
 static int __init cts_driver_init(void)
 {
     int ret = 0;
@@ -945,7 +913,7 @@ static int __init cts_driver_init(void)
                 printk ("touch_lcm_name_success=%s\n",touch_lcm_name);
         } else 
         {
-                return -1;
+                return 0;
         }
 
     cts_info("Chipone touch driver init, version: "CFG_CTS_DRIVER_VERSION);
@@ -962,11 +930,14 @@ static int __init cts_driver_init(void)
 #endif
 #ifdef CONFIG_CTS_I2C_HOST
     cts_info(" - Register i2c driver");
-    return i2c_add_driver(&cts_i2c_driver);
+    ret = i2c_add_driver(&cts_i2c_driver);
 #else
     cts_info(" - Register spi driver");
-    return spi_register_driver(&cts_spi_driver);
+    ret = spi_register_driver(&cts_spi_driver);
 #endif
+    if (!ret)
+        cts_driver_registered = true;
+    return ret;
     err_init_lct_tp_info_failed:
 	uninit_lct_tp_info();
 	return ret;
@@ -986,6 +957,9 @@ __setup("tp_lockdown_info=", lct_tp_icnl_is_lockdown_info_detect);
 static void __exit cts_driver_exit(void)
 {
     cts_info("Exit");
+
+    if (!cts_driver_registered)
+        return;
 
 #ifdef CONFIG_CTS_I2C_HOST
     i2c_del_driver(&cts_i2c_driver);

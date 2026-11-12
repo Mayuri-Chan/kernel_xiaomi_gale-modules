@@ -119,21 +119,6 @@ int idc_esdcheck_lcderror(struct fts_ts_data *ts_data)
 }
 #endif
 
-static int fts_esdcheck_tp_reset(struct fts_ts_data *ts_data)
-{
-    FTS_FUNC_ENTER();
-
-    fts_esdcheck_data.flow_work_hold_cnt = 0;
-    fts_esdcheck_data.hardware_reset_cnt++;
-
-    fts_reset_proc(200);
-    fts_release_all_finger();
-    fts_tp_state_recovery(ts_data);
-
-    FTS_FUNC_EXIT();
-    return 0;
-}
-
 static bool get_chip_id(struct fts_ts_data *ts_data)
 {
     int ret = 0;
@@ -164,6 +149,27 @@ static bool get_chip_id(struct fts_ts_data *ts_data)
     }
 
     return false;
+}
+
+static int fts_esdcheck_tp_reset(struct fts_ts_data *ts_data)
+{
+    FTS_FUNC_ENTER();
+
+    fts_esdcheck_data.flow_work_hold_cnt = 0;
+    fts_esdcheck_data.hardware_reset_cnt++;
+
+    fts_reset_proc(200);
+    fts_release_all_finger();
+    fts_tp_state_recovery(ts_data);
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+    if (get_chip_id(ts_data)) {
+        foc_ts_need_do_esd_recovery = true;
+        foc_tp_notify_lcd_esd();
+    }
+#endif
+
+    FTS_FUNC_EXIT();
+    return 0;
 }
 
 /*****************************************************************************
@@ -213,6 +219,13 @@ static int esdcheck_algorithm(struct fts_ts_data *ts_data)
     u8      reg_addr = 0;
     bool    hardware_reset = 0;
     unsigned long intr_timeout = msecs_to_jiffies(ESD_INTR_INTERVALS);
+
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+    if (foc_ts_need_do_esd_recovery) {
+        FTS_DEBUG("In lcd esd thread, skip tp esd");
+        return 0;
+    }
+#endif
 
     /* 1. esdcheck is interrupt, then return */
     intr_timeout += ts_data->intr_jiffies;

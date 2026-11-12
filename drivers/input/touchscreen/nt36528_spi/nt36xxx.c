@@ -26,8 +26,6 @@
 #include <linux/of_irq.h>
 #include "nt36xxx.h"
 
-#include "drm_notifier_odm.h"
-
 #if NVT_TOUCH_ESD_PROTECT
 #include <linux/jiffies.h>
 #endif
@@ -66,6 +64,7 @@ DECLARE_WORK(nvt_usb_plugin_work, nvt_ts_usb_plugin_work_func);
 struct nvt_ts_data *ts;
 
 bool nvt_gesture_flag;
+static struct xiaomi_touch_interface xiaomi_touch_interfaces;
 #if BOOT_UPDATE_FIRMWARE
 static struct workqueue_struct *nvt_fwu_wq;
 extern void Boot_Update_Firmware(struct work_struct *work);
@@ -73,6 +72,14 @@ extern void Boot_Update_Firmware(struct work_struct *work);
 
 static int nvt_mtk_drm_notifier_callback(struct notifier_block *nb,
 		unsigned long event, void *data);
+static int nvt_palm_sensor_write(int value);
+static void nvt_release_input_events(void);
+static void nvt_ts_resume_work(struct work_struct *work);
+static int tp_nvt_ts_esd_resume(void);
+static int tp_nvt_ts_esd_suspend(void);
+#if WAKEUP_GESTURE
+static int lct_nvt_tp_gesture_callback(bool enable_flag);
+#endif
 
 uint32_t ENG_RST_ADDR  = 0x7FFF80;
 uint32_t SPI_RD_FAST_ADDR = 0;
@@ -1166,6 +1173,48 @@ static int32_t nvt_ts_point_data_checksum(uint8_t *buf, uint8_t length)
 #define FUNCPAGE_PALM 4
 #define PACKET_PALM_ON 3
 #define PACKET_PALM_OFF 4
+static int nvt_apply_palm_sensor(bool enable)
+{
+	int ret = nvt_set_pocket_palm_switch(enable ? 1 : 0);
+
+	if (ret < 0)
+		NVT_ERR("%s: write anti mis-touch cmd on...ERROR %08X !\n",
+			"nvt_palm_sensor_cmd", ret);
+	else
+		NVT_LOG("%s %d\n", "nvt_palm_sensor_cmd", enable ? 1 : 0);
+	return ret;
+}
+
+static void nvt_reset_palm_sensor_on_power(bool enable)
+{
+	if (!ts->palm_sensor_enable)
+		return;
+
+	NVT_LOG("%s\n", enable ? "palm sensor OFF, switch to ON" : "palm sensor ON, switch to OFF");
+	update_palm_sensor_value(0);
+	nvt_apply_palm_sensor(enable);
+	ts->palm_sensor_enable = false;
+}
+
+static int nvt_palm_sensor_write(int value)
+{
+	int ret = 0;
+
+	ts->palm_sensor_enable = (value != 0);
+	if (!bTouchIsAwake) {
+		NVT_ERR("%s,bTouchIsAwake=%d\n", "nvt_palm_sensor_cmd", bTouchIsAwake);
+		return 0;
+	}
+
+	mutex_lock(&ts->lock);
+	ret = nvt_apply_palm_sensor(ts->palm_sensor_enable);
+	mutex_unlock(&ts->lock);
+	if (ret < 0)
+		return -EINVAL;
+	NVT_LOG("%s %d succeed\n", __func__, value);
+	return 0;
+}
+
 int32_t nvt_check_palm(uint8_t input_id, uint8_t *data)
 {
 	int32_t ret = 0;
@@ -1176,12 +1225,14 @@ int32_t nvt_check_palm(uint8_t input_id, uint8_t *data)
 		ret = palm_state;
 		if (palm_state == PACKET_PALM_ON) {
 			NVT_LOG("get packet palm on event.\n");
+			update_palm_sensor_value(1);
 			input_report_key(ts->input_dev, 523, 1);
 			input_sync(ts->input_dev);
 			input_report_key(ts->input_dev, 523, 0);
 			input_sync(ts->input_dev);
 		} else if (palm_state == PACKET_PALM_OFF) {
 			NVT_LOG("get packet palm off event.\n");
+			update_palm_sensor_value(0);
 		} else {
 
 			NVT_ERR("invalid palm state %d!\n", palm_state);
@@ -1210,10 +1261,10 @@ int32_t nvt_check_proximity(uint8_t input_id, uint8_t *data)
 	if ((input_id == DATA_PROTOCOL) && (func_type == FUNCPAGE_PROXIMITY)) {
 		ret = proximity_state;
 		if (proximity_state == PROXIMITY_ON) {
-			ps_send_touch_event(proximity_level? 1:0);
+			ps_send_touch_event(0);
 			NVT_LOG("get proximity on event, level=%d.\n", proximity_level);
 		} else if (proximity_state == PROXIMITY_OFF) {
-			ps_send_touch_event(0);
+			ps_send_touch_event(1);
 			NVT_LOG("get proximity off event.\n");
 		} else {
 
@@ -1620,16 +1671,33 @@ static int32_t nvt_ts_check_chip_ver_trim_loop(void) {
 }
 
 #if WAKEUP_GESTURE
+static int lct_nvt_tp_gesture_callback(bool enable_flag)
+{
+	if (!bTouchIsAwake) {
+		ts->gesture_wait_flag = true;
+		ts->gesture_wait_enable = enable_flag;
+		NVT_LOG("The gesture mode will be %s the next time you wakes up.\n",
+			enable_flag ? "enabled" : "disabled");
+		return 0;
+	}
+
+	nvt_gesture_flag = enable_flag;
+	set_lcd_reset_gpio_keep_high_1st(enable_flag);
+	if (enable_flag)
+		NVT_LOG("enable gesture mode\n");
+	else
+		NVT_LOG("disable gesture mode\n");
+	return 0;
+}
+
 int nvt_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	if (type == EV_SYN && code == SYN_CONFIG) {
 		if (value == WAKEUP_OFF) {
-			nvt_gesture_flag = false;
-			set_lcd_gesture_mode(false);
+			lct_nvt_tp_gesture_callback(false);
 			NVT_LOG("gesture disabled:%d", nvt_gesture_flag);
 		} else if (value == WAKEUP_ON) {
-			nvt_gesture_flag = true;
-			set_lcd_gesture_mode(true);
+			lct_nvt_tp_gesture_callback(true);
 			NVT_LOG("gesture enabled:%d", nvt_gesture_flag);
 		}
 	}
@@ -1653,8 +1721,7 @@ static ssize_t double_tap_store(struct kobject *kobj,
     if (rc)
     return -EINVAL;
 
-    nvt_gesture_flag = !!val;
-    set_lcd_gesture_mode(nvt_gesture_flag);
+    lct_nvt_tp_gesture_callback(!!val);
     return count;
 }
 
@@ -1890,11 +1957,19 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		ret = -EIO;
 		goto err_ckeck_full_duplex;
 	}
+	memset(&xiaomi_touch_interfaces, 0, sizeof(struct xiaomi_touch_interface));
+	xiaomi_touch_interfaces.palm_sensor_write = nvt_palm_sensor_write;
+	xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
+
 	ts->client->bits_per_word = 8;
 	ts->client->mode = SPI_MODE_0;
 
-	ts->client->cs_setup.value = 25;
-	ts->client->cs_setup.unit = SPI_DELAY_UNIT_NSECS;
+	ts->client->cs_setup.value = 1;
+	ts->client->cs_setup.unit = SPI_DELAY_UNIT_USECS;
+	ts->client->cs_hold.value = 1;
+	ts->client->cs_hold.unit = SPI_DELAY_UNIT_USECS;
+	ts->client->cs_inactive.value = 1;
+	ts->client->cs_inactive.unit = SPI_DELAY_UNIT_USECS;
 	ret = spi_setup(ts->client);
 	if (ret < 0) {
 		NVT_ERR("Failed to perform SPI setup\n");
@@ -1905,12 +1980,14 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 	ret = nvt_parse_dt(&client->dev);
 	if (ret) {
+		xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "novatek", 1);
 		NVT_ERR("parse dt error\n");
 		goto err_spi_setup;
 	}
 
 	ret = nvt_gpio_config(ts);
 	if (ret) {
+		xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "novatek", 1);
 		NVT_ERR("gpio config error!\n");
 		goto err_gpio_config_failed;
 	}
@@ -1928,6 +2005,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 	ret = nvt_ts_check_chip_ver_trim_loop();
 	if (ret) {
+		xiaomi_touch_mievent_report_int(0x365c07e9, 0, "TpTransferErr", "novatek", ret);
 		NVT_ERR("chip is not identified\n");
 		ret = -EINVAL;
 		goto err_chipvertrim_failed;
@@ -2120,16 +2198,36 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 #endif
 #endif
 
+#if WAKEUP_GESTURE
+	ret = init_lct_tp_gesture(lct_nvt_tp_gesture_callback);
+	if (ret < 0) {
+		NVT_ERR("init_lct_tp_gesture Failed!\n");
+		goto err_register_suspend_resume_failed;
+	}
+	ts->gesture_initialized = true;
+#endif
+
 	bTouchIsAwake = 1;
 	tp_select_proximity = 1;
 
-    ts->disp_notifier.notifier_call = nvt_mtk_drm_notifier_callback;
-	ret = drm_register_client(&ts->disp_notifier);
-    if (ret) {
-        NVT_ERR("register mtk_disp_notifier failed\n");
-        goto err_register_suspend_resume_failed;
-    }
+	ts->resume_wq = alloc_workqueue("nvt_ts_resume_wq", WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_HIGHPRI, 1);
+	if (!ts->resume_wq) {
+		NVT_ERR("allocate resume workqueue failed.\n");
+		ret = -ENOMEM;
+		goto err_register_suspend_resume_failed;
+	}
+	INIT_WORK(&ts->resume_work, nvt_ts_resume_work);
+
+	ts->disp_notifier.notifier_call = nvt_mtk_drm_notifier_callback;
+	ret = mtk_disp_notifier_register(NVT_SPI_NAME, &ts->disp_notifier);
+	if (ret) {
+		NVT_ERR("register mtk_disp_notifier failed\n");
+		goto err_register_suspend_resume_failed;
+	}
 	ts->disp_notifier_registered = true;
+	nvt_ts_esd_resume_probe = true;
+	lcd_nvt_ts_esd_resume = tp_nvt_ts_esd_resume;
+	lcd_nvt_ts_esd_suspend = tp_nvt_ts_esd_suspend;
 
 	NVT_LOG("end\n");
 
@@ -2142,10 +2240,23 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	return 0;
 
 err_register_suspend_resume_failed:
+	nvt_ts_esd_resume_probe = false;
+	lcd_nvt_ts_esd_resume = NULL;
+	lcd_nvt_ts_esd_suspend = NULL;
 	if (ts->disp_notifier_registered) {
-		drm_unregister_client(&ts->disp_notifier);
+		mtk_disp_notifier_unregister(&ts->disp_notifier);
 		ts->disp_notifier_registered = false;
 	}
+	if (ts->resume_wq) {
+		destroy_workqueue(ts->resume_wq);
+		ts->resume_wq = NULL;
+	}
+#if WAKEUP_GESTURE
+	if (ts->gesture_initialized) {
+		uninit_lct_tp_gesture();
+		ts->gesture_initialized = false;
+	}
+#endif
 #if BOOT_UPDATE_FIRMWARE
 	if (nvt_fwu_wq)
 		cancel_delayed_work_sync(&ts->nvt_fwu_work);
@@ -2245,10 +2356,23 @@ static void nvt_ts_remove(struct spi_device *client)
 
 	nvt_irq_enable(false);
 
+	nvt_ts_esd_resume_probe = false;
+	lcd_nvt_ts_esd_resume = NULL;
+	lcd_nvt_ts_esd_suspend = NULL;
 	if (ts->disp_notifier_registered) {
-		drm_unregister_client(&ts->disp_notifier);
+		mtk_disp_notifier_unregister(&ts->disp_notifier);
 		ts->disp_notifier_registered = false;
 	}
+	if (ts->resume_wq) {
+		destroy_workqueue(ts->resume_wq);
+		ts->resume_wq = NULL;
+	}
+#if WAKEUP_GESTURE
+	if (ts->gesture_initialized) {
+		uninit_lct_tp_gesture();
+		ts->gesture_initialized = false;
+	}
+#endif
 
 #if BOOT_UPDATE_FIRMWARE
 	if (nvt_fwu_wq) {
@@ -2271,8 +2395,8 @@ static void nvt_ts_remove(struct spi_device *client)
 		ts->common_initialized = false;
 	}
 	cancel_work_sync(&nvt_usb_plugin_work);
-	set_lcd_gesture_mode(false);
 	set_lcd_reset_gpio_keep_high_1st(false);
+	set_prox_lcd_reset_gpio_keep_high1(false);
 #endif
 
 #if NVT_TOUCH_PROC
@@ -2343,10 +2467,23 @@ static void nvt_ts_shutdown(struct spi_device *client)
 
 	nvt_irq_enable(false);
 
+	nvt_ts_esd_resume_probe = false;
+	lcd_nvt_ts_esd_resume = NULL;
+	lcd_nvt_ts_esd_suspend = NULL;
 	if (ts->disp_notifier_registered) {
-		drm_unregister_client(&ts->disp_notifier);
+		mtk_disp_notifier_unregister(&ts->disp_notifier);
 		ts->disp_notifier_registered = false;
 	}
+	if (ts->resume_wq) {
+		destroy_workqueue(ts->resume_wq);
+		ts->resume_wq = NULL;
+	}
+#if WAKEUP_GESTURE
+	if (ts->gesture_initialized) {
+		uninit_lct_tp_gesture();
+		ts->gesture_initialized = false;
+	}
+#endif
 
 #if BOOT_UPDATE_FIRMWARE
 	if (nvt_fwu_wq) {
@@ -2369,8 +2506,8 @@ static void nvt_ts_shutdown(struct spi_device *client)
 		ts->common_initialized = false;
 	}
 	cancel_work_sync(&nvt_usb_plugin_work);
-	set_lcd_gesture_mode(false);
 	set_lcd_reset_gpio_keep_high_1st(false);
+	set_prox_lcd_reset_gpio_keep_high1(false);
 #endif
 
 #if NVT_TOUCH_PROC
@@ -2393,12 +2530,28 @@ static void nvt_ts_shutdown(struct spi_device *client)
 #endif
 }
 
+static void nvt_release_input_events(void)
+{
+#if MT_PROTOCOL_B
+	uint32_t i = 0;
+
+	for (i = 0; i < ts->max_touch_num; i++) {
+		input_mt_slot(ts->input_dev, i);
+		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
+		input_report_abs(ts->input_dev, ABS_MT_PRESSURE, 0);
+		input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
+	}
+#endif
+	input_report_key(ts->input_dev, BTN_TOUCH, 0);
+#if !MT_PROTOCOL_B
+	input_mt_sync(ts->input_dev);
+#endif
+	input_sync(ts->input_dev);
+}
+
 static int32_t nvt_ts_suspend(struct device *dev)
 {
 	uint8_t buf[4] = {0};
-#if MT_PROTOCOL_B
-	uint32_t i = 0;
-#endif
 
 	if (!bTouchIsAwake) {
 		NVT_LOG("Touch is already suspend\n");
@@ -2420,6 +2573,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	mutex_lock(&ts->lock);
 
+	nvt_reset_palm_sensor_on_power(false);
 	NVT_LOG("start\n");
 
 	bTouchIsAwake = 0;
@@ -2448,19 +2602,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	mutex_unlock(&ts->lock);
 
-#if MT_PROTOCOL_B
-	for (i = 0; i < ts->max_touch_num; i++) {
-		input_mt_slot(ts->input_dev, i);
-		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
-		input_report_abs(ts->input_dev, ABS_MT_PRESSURE, 0);
-		input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
-	}
-#endif
-	input_report_key(ts->input_dev, BTN_TOUCH, 0);
-#if !MT_PROTOCOL_B
-	input_mt_sync(ts->input_dev);
-#endif
-	input_sync(ts->input_dev);
+	nvt_release_input_events();
 
 	if (ts->pen_support) {
 		input_report_abs(ts->pen_input_dev, ABS_X, 0);
@@ -2512,7 +2654,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 	if (nvt_gesture_flag == false)
 		nvt_irq_enable(true);
 #else
-	nvt_irq_enable(ture);
+	nvt_irq_enable(true);
 #endif
 
 #if NVT_TOUCH_ESD_PROTECT
@@ -2522,6 +2664,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 #endif
 
 	bTouchIsAwake = 1;
+	nvt_reset_palm_sensor_on_power(true);
 
 	if(proximity_event) {
         nvt_set_proximity_power_saving_switch(0);
@@ -2529,6 +2672,13 @@ static int32_t nvt_ts_resume(struct device *dev)
 	}
 
 	mutex_unlock(&ts->lock);
+
+#if WAKEUP_GESTURE
+	if (ts->gesture_wait_flag) {
+		lct_nvt_tp_gesture_callback(ts->gesture_wait_enable);
+		ts->gesture_wait_flag = false;
+	}
+#endif
 
 #if LCT_TP_WORK_EN
     if (!get_lct_tp_work_status())
@@ -2545,19 +2695,52 @@ static int32_t nvt_ts_resume(struct device *dev)
 	return 0;
 }
 
+static void nvt_ts_resume_work(struct work_struct *work)
+{
+	NVT_LOG("%s:++\n", __func__);
+	nvt_ts_resume(&ts->client->dev);
+	NVT_LOG("%s:--\n", __func__);
+}
+
+static int tp_nvt_ts_esd_resume(void)
+{
+	bTouchIsAwake = 0;
+	nvt_ts_resume(&ts->client->dev);
+	return 0;
+}
+
+static int tp_nvt_ts_esd_suspend(void)
+{
+	bTouchIsAwake = 1;
+	nvt_ts_suspend(&ts->client->dev);
+	return 0;
+}
+
 static int nvt_mtk_drm_notifier_callback(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
-	struct drm_notifier_data *evdata = data;
-	int *blank = evdata ? evdata->data : NULL;
+	int *blank = data;
 
-	if (event != DRM_EVENT_BLANK || !blank ||
-	    evdata->id != MSM_DRM_PRIMARY_DISPLAY)
+	if (!blank)
 		return NOTIFY_DONE;
-	if (*blank == DRM_BLANK_POWERDOWN)
-		nvt_ts_suspend(&ts->client->dev);
-	else if (*blank == DRM_BLANK_UNBLANK)
-		nvt_ts_resume(&ts->client->dev);
+
+	if (ts->resume_wq)
+		flush_workqueue(ts->resume_wq);
+
+	if (event == MTK_DISP_EARLY_EVENT_BLANK && *blank == MTK_DISP_BLANK_POWERDOWN) {
+		if (!proximity_event) {
+			nvt_ts_suspend(&ts->client->dev);
+		} else {
+			bTouchIsAwake = 0;
+			if (!ts->irq_wake_enabled && !enable_irq_wake(ts->client->irq))
+				ts->irq_wake_enabled = true;
+			nvt_release_input_events();
+		}
+	} else if (event == MTK_DISP_EVENT_BLANK && *blank == MTK_DISP_BLANK_UNBLANK) {
+		if (ts->resume_wq)
+			queue_work(ts->resume_wq, &ts->resume_work);
+	}
+
 	return NOTIFY_OK;
 }
 

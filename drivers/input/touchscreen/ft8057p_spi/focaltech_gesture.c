@@ -70,8 +70,6 @@
 #define GESTURE_Z                               0x41
 #define GESTURE_C                               0x34
 
-bool fts_gesture_flag = false;
-
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
 *****************************************************************************/
@@ -443,6 +441,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
     }
 #if FTS_THREE_IN_ONE
     ret = fts_enter_gesture_fw();
+    lcd_gesture_flag = true;
     if (ret < 0) {
         FTS_ERROR("download gesture firmware fail");
         return ret;
@@ -500,10 +499,10 @@ int fts_gesture_resume(struct fts_ts_data *ts_data)
 }
 
 #ifndef WAKEUP_OFF
-#define WAKEUP_OFF 0
+#define WAKEUP_OFF 4
 #endif
 #ifndef WAKEUP_ON
-#define WAKEUP_ON 1
+#define WAKEUP_ON 5
 #endif
 
 int fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int code, int value)

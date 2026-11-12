@@ -7,6 +7,7 @@
 #include "cts_sysfs.h"
 #include "cts_tcs.h"
 #include "../lct_tp/lct_tp_gesture.h"
+#include "../xiaomi/xiaomi_touch.h"
 
 #ifdef CFG_CTS_FW_LOG_REDIRECT
 size_t cts_plat_get_max_fw_log_size(struct cts_platform_data *pdata)
@@ -638,14 +639,22 @@ int cts_plat_spi_setup(struct cts_platform_data *pdata)
     pdata->spi_client->chip_select = 0;
     pdata->spi_client->mode = SPI_MODE_0;
     pdata->spi_client->bits_per_word = 8;
+    pdata->spi_client->cs_setup.value = 1;
+    pdata->spi_client->cs_setup.unit = SPI_DELAY_UNIT_USECS;
+    pdata->spi_client->cs_hold.value = 1;
+    pdata->spi_client->cs_hold.unit = SPI_DELAY_UNIT_USECS;
+    pdata->spi_client->cs_inactive.value = 1;
+    pdata->spi_client->cs_inactive.unit = SPI_DELAY_UNIT_USECS;
 
     cts_info("chip_select  :%d", pdata->spi_client->chip_select);
     cts_info("spi_mode     :%d", pdata->spi_client->mode);
     cts_info("bits_per_word:%d", pdata->spi_client->bits_per_word);
 
     ret = spi_setup(pdata->spi_client);
-    if (ret)
+    if (ret) {
+        xiaomi_touch_mievent_report_str(0x365c07e9, 0, "TpTransferErr", "chipone");
         cts_err("spi_setup err!");
+    }
     return 0;
 }
 #endif
@@ -655,8 +664,10 @@ int cts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 {
 	if (type == EV_SYN && code == SYN_CONFIG) {
 		if (value == WAKEUP_OFF) {
+			set_lcd_reset_gpio_keep_high_4th(false);
 			cts_gesture_flag = false;
 		} else if (value == WAKEUP_ON) {
+			set_lcd_reset_gpio_keep_high_4th(true);
 			cts_gesture_flag = true;
 		}
 	}
@@ -690,6 +701,7 @@ int cts_init_platform_data(struct cts_platform_data *pdata,
 #endif /* CONFIG_CTS_I2C_HOST */
         ret = cts_plat_parse_dt(pdata, dev->of_node);
         if (ret) {
+            xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "chipone", 2);
             cts_err("Parse dt failed %d", ret);
             return ret;
         }
@@ -808,6 +820,7 @@ int cts_plat_request_resource(struct cts_platform_data *pdata)
     ret = gpio_request_one(pdata->int_gpio, GPIOF_IN,
             CFG_CTS_DEVICE_NAME "-int");
     if (ret) {
+        xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "chipone", 1);
         cts_err("Request INT gpio (%d) failed %d", pdata->int_gpio, ret);
         goto err_out;
     }
@@ -815,6 +828,7 @@ int cts_plat_request_resource(struct cts_platform_data *pdata)
     ret = gpio_request_one(pdata->rst_gpio, GPIOF_OUT_INIT_HIGH,
             CFG_CTS_DEVICE_NAME "-rst");
     if (ret) {
+        xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "chipone", 1);
         cts_err("Request RST gpio (%d) failed %d", pdata->rst_gpio, ret);
         goto err_free_int;
     }

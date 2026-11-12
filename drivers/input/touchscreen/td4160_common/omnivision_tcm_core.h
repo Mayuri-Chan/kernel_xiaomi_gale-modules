@@ -37,10 +37,7 @@
 #include <linux/input.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
-#ifdef CONFIG_FB
-#include <linux/fb.h>
 #include <linux/notifier.h>
-#endif
 #include <linux/slab.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0))
 	#include <linux/sched/signal.h>
@@ -267,6 +264,7 @@ enum dynamic_config_id {
 	DC_ENABLE_THICK_GLOVE,
 	DC_ENABLE_GLOVE,
 	DC_ENABLE_FACE = 0x10,
+	DC_ENABLE_PALM = 0x11,
 	DC_ENABLE_ROATE_HORIZONTAL_LEVEL = 0xc3,
 	DC_ENABLE_EAR_PHONE = 0xc9,
 };
@@ -516,6 +514,7 @@ struct ovt_tcm_hcd {
 	unsigned int func_charger_connected_en;
 	unsigned int func_roate_horizontal_level_en;
 	unsigned int func_face_detect_en;
+	unsigned int func_palm_detect_en;
 
 	struct platform_device *pdev;
 	struct regulator *pwr_reg;
@@ -534,9 +533,6 @@ struct ovt_tcm_hcd {
 	struct task_struct *notifier_thread;
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	struct notifier_block disp_notifier;
-#endif
-#ifdef CONFIG_FB
-	struct notifier_block fb_notifier;
 #endif
 	struct ovt_tcm_buffer in;
 	struct ovt_tcm_buffer out;
@@ -797,6 +793,12 @@ static inline unsigned int ceil_div(unsigned int dividend, unsigned divisor)
 
 extern int ovt_tcm_set_func_charger_connected_en_state(unsigned short value);
 extern int ovt_tcm_set_func_face_detect_en_state(unsigned short value);
+extern int ovt_tcm_set_func_palm_detect_en_state(unsigned short value);
 extern int ovt_tcm_set_func_ear_phone_connected_en_state(unsigned short value);
 extern int ovt_tcm_set_func_roate_horizontal_level_en_state(unsigned short value);
+extern void touch_free_objects(void);
+extern int testing_do_testing(void);
+extern int lct_ovt_tp_selftest_callback(unsigned char cmd);
+extern int lct_ovt_tp_data_dump_proc_init(void);
+extern void lct_ovt_tp_data_dump_proc_exit(void);
 #endif

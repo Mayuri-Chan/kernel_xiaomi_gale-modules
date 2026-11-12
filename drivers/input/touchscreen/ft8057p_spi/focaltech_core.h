@@ -72,6 +72,11 @@
 #endif
 
 #include "../lct_tp/lct_tp_common.h"
+#include "../lct_tp/lct_tp_gesture.h"
+#include "../xiaomi/xiaomi_touch.h"
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+#include "mi_disp_esd_check.h"
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -390,8 +395,14 @@ int fts_enter_test_environment(bool test_state);
 #if FTS_THREE_IN_ONE
 int fts_enter_gesture_fw(void);
 int fts_enter_normal_fw(void);
-void fts_fwresume_work(void);
+extern void (*fts_fwresume_work)(void);
 #endif
+extern bool fts_gesture_flag;
+extern bool lcd_gesture_flag;
+extern void set_prox_lcd_reset_gpio_keep_high(bool enable);
+int lct_fts_tp_gesture_callback(bool enable_tp);
+int fts_palm_sensor_cmd(int value);
+int fts_palm_sensor_write(int value);
 
 /* Other */
 int fts_reset_proc(int hdelayms);

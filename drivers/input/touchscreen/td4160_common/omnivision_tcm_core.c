@@ -33,6 +33,10 @@
 #include <linux/interrupt.h>
 #include <linux/regulator/consumer.h>
 #include "omnivision_tcm_core.h"
+#include "../lct_tp/lct_tp_common.h"
+#include "../xiaomi/xiaomi_touch.h"
+
+extern void set_prox_lcd_reset_gpio_keep_high3(bool enable);
 
 /* #define RESET_ON_RESUME */
 
@@ -106,13 +110,235 @@ int ovt_tcm_set_func_##c_name##_en_state(unsigned short value) \
 
 ovt_tcm_set_func_en(charger_connected, DC_CHARGER_CONNECTED)
 ovt_tcm_set_func_en(face_detect, DC_ENABLE_FACE)
+ovt_tcm_set_func_en(palm_detect, DC_ENABLE_PALM)
 ovt_tcm_set_func_en(ear_phone_connected, DC_ENABLE_EAR_PHONE)
 ovt_tcm_set_func_en(roate_horizontal_level, DC_ENABLE_ROATE_HORIZONTAL_LEVEL)
 
 EXPORT_SYMBOL(ovt_tcm_set_func_charger_connected_en_state);
 EXPORT_SYMBOL(ovt_tcm_set_func_face_detect_en_state);
+EXPORT_SYMBOL(ovt_tcm_set_func_palm_detect_en_state);
 EXPORT_SYMBOL(ovt_tcm_set_func_ear_phone_connected_en_state);
 EXPORT_SYMBOL(ovt_tcm_set_func_roate_horizontal_level_en_state);
+
+static int ovt_palm_sensor_switch;
+static int ovt_proximity_en;
+static struct xiaomi_touch_interface ovt_xiaomi_touch_interfaces;
+
+static int ovt_palm_sensor_cmd(int on)
+{
+	int retval;
+
+	retval = ovt_tcm_set_func_palm_detect_en_state(on ? 1 : 0);
+	if (retval < 0)
+		pr_err("%s: set palm detect %d failed: %d\n", __func__, on, retval);
+
+	return retval;
+}
+
+static int ovt_palm_sensor_write(int value)
+{
+	int retval;
+
+	ovt_palm_sensor_switch = value ? 1 : 0;
+	retval = ovt_palm_sensor_cmd(ovt_palm_sensor_switch);
+	if (retval < 0)
+		return retval;
+
+	pr_info("%s %d succeed\n", __func__, ovt_palm_sensor_switch);
+	return 0;
+}
+
+static void ovt_ts_usb_plugin_work_func(struct work_struct *work)
+{
+	int retval = 0;
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+
+	if (!tcm_hcd)
+		return;
+
+	if (tcm_hcd->in_suspend) {
+		pr_info("%s: in suspend, skip usb plugin\n", __func__);
+		return;
+	}
+
+	pr_info("%s: usb_plugged_in = %d\n", __func__,
+			g_touchscreen_usb_pulgin.usb_plugged_in);
+
+	if (!IS_NOT_FW_MODE(tcm_hcd->id_info.mode) &&
+			!tcm_hcd->in_suspend &&
+			!atomic_read(&tcm_hcd->host_downloading)) {
+		retval = tcm_hcd->set_dynamic_config(tcm_hcd,
+				DC_CHARGER_CONNECTED,
+				g_touchscreen_usb_pulgin.usb_plugged_in);
+		if (retval < 0)
+			LOGE(tcm_hcd->pdev->dev.parent,
+					"Failed to set DC_CHARGER_CONNECTED command\n");
+	}
+	tcm_hcd->func_charger_connected_en =
+			g_touchscreen_usb_pulgin.usb_plugged_in;
+}
+
+static DECLARE_WORK(ovt_usb_plugin_work, ovt_ts_usb_plugin_work_func);
+
+static void ovt_ts_usb_event_callback(void)
+{
+	queue_work(system_wq, &ovt_usb_plugin_work);
+}
+
+static int ovt_set_proximity_switch(bool enable_tp)
+{
+	int flag = enable_tp ? 1 : 0;
+
+	pr_info("Enter %s(%d): flag=%d, touch_lcm_name=%s\n",
+			__func__, __LINE__, flag, touch_lcm_name);
+	if (strcmp(touch_lcm_name, "dsi_panel_c3uv_46_0f_0c_vdo") != 0) {
+		pr_info("Enter %s(%d): No lcm, setting disabled!.\n",
+				__func__, __LINE__);
+		return -1;
+	}
+
+	if (enable_tp) {
+		set_prox_lcd_reset_gpio_keep_high3(true);
+		ovt_proximity_en = 1;
+		ovt_tcm_set_func_face_detect_en_state(1);
+	} else {
+		set_prox_lcd_reset_gpio_keep_high3(false);
+		ovt_proximity_en = 0;
+		ovt_tcm_set_func_face_detect_en_state(0);
+	}
+
+	return 0;
+}
+
+static int lct_ovt_tp_proximity_callback(bool enable_tp)
+{
+	int retval;
+
+	retval = ovt_set_proximity_switch(enable_tp);
+	if (retval < 0)
+		pr_err("%s(%d): set proximity switch(%d) failed: %d\n",
+				__func__, __LINE__, enable_tp ? 1 : 0, retval);
+	else
+		pr_info("%s(%d): set proximity switch(%d) success\n",
+				__func__, __LINE__, enable_tp ? 1 : 0);
+
+	return retval;
+}
+
+static int lct_ovt_tp_work_callback(bool enable_tp)
+{
+	int retval = 0;
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+
+	pr_info("call back successfully by xiali\n");
+	if (!tcm_hcd)
+		return -ENODEV;
+
+	mutex_lock(&tcm_hcd->extif_mutex);
+	if (enable_tp) {
+		retval = tcm_hcd->enable_irq(tcm_hcd, true, false);
+		pr_info("%s: enable irq, retval=%d\n", __func__, retval);
+	} else {
+		retval = tcm_hcd->enable_irq(tcm_hcd, false, true);
+		pr_info("%s: disable irq, retval=%d\n", __func__, retval);
+	}
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"Failed to %s irq\n",
+				enable_tp ? "enable" : "disable");
+	else
+		set_lct_tp_work_status(enable_tp);
+
+	mutex_unlock(&tcm_hcd->extif_mutex);
+	return 0;
+}
+
+static int lct_ovt_tp_set_screen_angle_callback(int angle)
+{
+	int retval = 0;
+	unsigned short mode;
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+
+	if (!tcm_hcd)
+		return -ENODEV;
+
+	retval = tcm_hcd->set_dynamic_config(tcm_hcd,
+			DC_GRIP_SUPPRESSION_ENABLED, 1);
+	if (retval < 0)
+		pr_err("open angle failed!\n");
+
+	if (angle == 90)
+		mode = 1;
+	else if (angle == 270)
+		mode = 2;
+	else
+		mode = 0;
+
+	retval = tcm_hcd->set_dynamic_config(tcm_hcd, 0xd0, mode);
+	if (retval < 0) {
+		pr_err("write angle failed!\n");
+		return retval;
+	}
+
+	return 0;
+}
+
+static int lct_ovt_tp_get_screen_angle_callback(void)
+{
+	return 1;
+}
+
+static void ovt_lct_tp_init(struct ovt_tcm_hcd *tcm_hcd)
+{
+	int retval;
+
+	retval = init_lct_tp_info("[Vendor]unkown,[FW]unkown,[IC]unkown\n");
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"init_lct_tp_info Failed! ret = %d\n", retval);
+
+	retval = init_lct_tp_selftest(lct_ovt_tp_selftest_callback);
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"init_lct_tp_selftest Failed! ret = %d\n", retval);
+
+	retval = lct_ovt_tp_data_dump_proc_init();
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"lct_ovt_tp_data_dump_proc_init Failed! ret = %d\n",
+				retval);
+
+	g_touchscreen_usb_pulgin.event_callback = ovt_ts_usb_event_callback;
+
+	retval = init_lct_tp_grip_area(lct_ovt_tp_set_screen_angle_callback,
+			lct_ovt_tp_get_screen_angle_callback);
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"init_lct_tp_grip_area Failed! ret = %d\n", retval);
+
+	retval = init_lct_tp_proximity_switch(lct_ovt_tp_proximity_callback);
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"init_lct_tp_proximity_switch Failed! ret = %d\n",
+				retval);
+
+	retval = init_lct_tp_work(lct_ovt_tp_work_callback);
+	if (retval < 0)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"init_lct_tp_work Failed! ret = %d\n", retval);
+}
+
+static void ovt_lct_tp_uninit(void)
+{
+	g_touchscreen_usb_pulgin.event_callback = NULL;
+	cancel_work_sync(&ovt_usb_plugin_work);
+	uninit_lct_tp_work();
+	uninit_lct_tp_proximity_switch();
+	uninit_lct_tp_grip_area();
+	lct_ovt_tp_data_dump_proc_exit();
+	uninit_lct_tp_selftest();
+	uninit_lct_tp_info();
+}
 
 
 
@@ -2736,6 +2962,17 @@ get_info:
 					"Failed to get application info\n");
 			goto exit;
 		}
+		{
+			char tp_info[128];
+
+			LOGI(tcm_hcd->pdev->dev.parent,
+					"customer_config_id[15] = 0x%02x\n",
+					tcm_hcd->app_info.customer_config_id[15]);
+			snprintf(tp_info, sizeof(tp_info),
+					"[Vendor]omnivision,[FW]0x%02x,[IC]td4160\n",
+					tcm_hcd->app_info.customer_config_id[15]);
+			update_lct_tp_info(tp_info);
+		}
 		break;
 	case MODE_BOOTLOADER:
 	case MODE_TDDI_BOOTLOADER:
@@ -3108,6 +3345,12 @@ static void ovt_tcm_reinit_func_when_hdl_done(void)
 		retval = ovt_tcm_set_dynamic_config(tcm_hcd, DC_ENABLE_FACE, tcm_hcd->func_face_detect_en);
 		if (retval != 0) {
 			LOGE(tcm_hcd->pdev->dev.parent,"Failed to set DC_ENABLE_FACE command\n");
+		}
+	}
+	if (tcm_hcd->func_palm_detect_en) {
+		retval = ovt_tcm_set_dynamic_config(tcm_hcd, DC_ENABLE_PALM, tcm_hcd->func_palm_detect_en);
+		if (retval != 0) {
+			LOGE(tcm_hcd->pdev->dev.parent,"Failed to set DC_ENABLE_PALM command\n");
 		}
 	}
 	if (tcm_hcd->func_ear_phone_connected_en) {
@@ -3561,7 +3804,8 @@ int ovt_tcm_resume(struct device *dev)
 		return 0;
 
 	if (tcm_hcd->in_hdl_mode) {
-		tcm_hcd->enable_irq(tcm_hcd, true, NULL);
+		if (get_lct_tp_work_status())
+			tcm_hcd->enable_irq(tcm_hcd, true, false);
 		retval = ovt_tcm_wait_hdl(tcm_hcd);
 		if (retval < 0) {
 			LOGE(tcm_hcd->pdev->dev.parent,
@@ -3645,6 +3889,15 @@ mod_resume:
 exit:
 	tcm_hcd->in_suspend = false;
 
+	if (retval == 0) {
+		if (ovt_proximity_en)
+			ovt_tcm_set_func_face_detect_en_state(ovt_proximity_en);
+		if (ovt_palm_sensor_switch)
+			ovt_palm_sensor_cmd(ovt_palm_sensor_switch);
+		if (!IS_ERR_OR_NULL(g_touchscreen_usb_pulgin.event_callback))
+			g_touchscreen_usb_pulgin.event_callback();
+	}
+
 	return retval;
 }
 
@@ -3681,6 +3934,11 @@ int ovt_tcm_suspend(struct device *dev)
 		}
 	}
 
+	if (ovt_palm_sensor_switch) {
+		update_palm_sensor_value(0);
+		ovt_palm_sensor_cmd(0);
+		ovt_palm_sensor_switch = 0;
+	}
 
 	tcm_hcd->in_suspend = true;
 
@@ -3741,91 +3999,54 @@ static int td4160_tcm_disp_notifier_callback(struct notifier_block *nb,
 		unsigned long value, void *v)
 {
 	int retval = 0;
+	int *transition;
 	struct ovt_tcm_hcd *tcm_hcd =
 			container_of(nb, struct ovt_tcm_hcd, disp_notifier);
-	int *data = (int *)v;
 
-	LOGI(tcm_hcd->pdev->dev.parent, "%s: value:0x%lx, *data:0x%x in\n", __func__, value, *data);
-	if (tcm_hcd && v) {
-		if (value == MTK_DISP_EVENT_BLANK) {
-			//resume: touch power on is after display to avoid display disturb
-			if (*data == MTK_DISP_BLANK_UNBLANK) {
-				LOGI(tcm_hcd->pdev->dev.parent, "%s: resume in\n", __func__);
-				retval = ovt_tcm_resume(&tcm_hcd->pdev->dev);
-				LOGI(tcm_hcd->pdev->dev.parent, "%s: resume out\n", __func__);
-			} else if (*data == MTK_DISP_BLANK_POWERDOWN) {
-					LOGI(tcm_hcd->pdev->dev.parent, "%s: suspend in\n", __func__);
-					retval = ovt_tcm_suspend(&tcm_hcd->pdev->dev);
-					LOGI(tcm_hcd->pdev->dev.parent, "%s: suspend out\n", __func__);
-			}
-		} else if (value == MTK_DISP_EARLY_EVENT_BLANK) {
-			//suspend: touch power off is before display to avoid touch report event
-			//after screen is off
-				if (*data == MTK_DISP_BLANK_POWERDOWN) {
-					LOGI(tcm_hcd->pdev->dev.parent, "%s: ealy suspend in\n", __func__);
-					retval = ovt_tcm_early_suspend(&tcm_hcd->pdev->dev);
-					LOGI(tcm_hcd->pdev->dev.parent, "%s: ealy suspend out\n", __func__);
-			}
-		} else {
-			LOGI(tcm_hcd->pdev->dev.parent, "%s: touch IC can not suspend or resume\n", __func__);
-				return -1;
-		}
-	}
-	return 0;
-}
-#endif
+	if (!tcm_hcd || !v)
+		return 0;
 
-#if 0
-static int ovt_tcm_fb_notifier_cb(struct notifier_block *nb,
-		unsigned long action, void *data)
-{
-	int retval;
-	int *transition;
-	struct fb_event *evdata = data;
-	struct ovt_tcm_hcd *tcm_hcd =
-			container_of(nb, struct ovt_tcm_hcd, fb_notifier);
+	transition = (int *)v;
+	LOGI(tcm_hcd->pdev->dev.parent,
+			"%s: value:0x%lx, *data:0x%x in\n",
+			__func__, value, *transition);
 
-	retval = 0;
-	if (evdata && evdata->data && tcm_hcd) {
-		transition = evdata->data;
-
-		if (atomic_read(&tcm_hcd->firmware_flashing) &&
-				*transition == FB_BLANK_POWERDOWN) {
-
-			retval = wait_event_interruptible_timeout(
+	if (atomic_read(&tcm_hcd->firmware_flashing) &&
+			*transition == MTK_DISP_BLANK_POWERDOWN) {
+		retval = wait_event_interruptible_timeout(
 				tcm_hcd->reflash_wq,
 				!atomic_read(&tcm_hcd->firmware_flashing),
-				msecs_to_jiffies(RESPONSE_TIMEOUT_MS)
-				);
-			if (retval == 0) {
-				LOGE(tcm_hcd->pdev->dev.parent,
-						"Timed out waiting for completion of flashing firmware\n");
-				atomic_set(&tcm_hcd->firmware_flashing, 0);
-				return -EIO;
-			} else {
-				retval = 0;
-			}
+				msecs_to_jiffies(RESPONSE_TIMEOUT_MS));
+		if (retval == 0) {
+			LOGE(tcm_hcd->pdev->dev.parent,
+					"Timed out waiting for completion of flashing firmware\n");
+			atomic_set(&tcm_hcd->firmware_flashing, 0);
+			return -EIO;
 		}
+		retval = 0;
+	}
 
-		if (action == FB_EARLY_EVENT_BLANK &&
-				*transition == FB_BLANK_POWERDOWN)
+	if (value == MTK_DISP_EARLY_EVENT_BLANK &&
+			*transition == MTK_DISP_BLANK_POWERDOWN) {
+		if (!ovt_proximity_en) {
+			LOGI(tcm_hcd->pdev->dev.parent, "%s: ealy suspend in\n", __func__);
 			retval = ovt_tcm_early_suspend(&tcm_hcd->pdev->dev);
-		else if (action == FB_EVENT_BLANK) {
-			if (*transition == FB_BLANK_POWERDOWN) {
+			LOGI(tcm_hcd->pdev->dev.parent, "%s: ealy suspend out\n", __func__);
+		}
+	} else if (value == MTK_DISP_EVENT_BLANK) {
+		if (*transition == MTK_DISP_BLANK_POWERDOWN) {
+			LOGI(tcm_hcd->pdev->dev.parent, "%s: suspend in\n", __func__);
+			if (ovt_proximity_en)
+				touch_free_objects();
+			else
 				retval = ovt_tcm_suspend(&tcm_hcd->pdev->dev);
-				tcm_hcd->fb_ready = 0;
-			} else if (*transition == FB_BLANK_UNBLANK) {
-#ifndef RESUME_EARLY_UNBLANK
-				retval = ovt_tcm_resume(&tcm_hcd->pdev->dev);
-				tcm_hcd->fb_ready++;
-#endif
-			}
-		} else if (action == FB_EARLY_EVENT_BLANK &&
-				*transition == FB_BLANK_UNBLANK) {
-#ifdef RESUME_EARLY_UNBLANK
-				retval = ovt_tcm_resume(&tcm_hcd->pdev->dev);
-				tcm_hcd->fb_ready++;
-#endif
+			tcm_hcd->fb_ready = 0;
+			LOGI(tcm_hcd->pdev->dev.parent, "%s: suspend out\n", __func__);
+		} else if (*transition == MTK_DISP_BLANK_UNBLANK) {
+			LOGI(tcm_hcd->pdev->dev.parent, "%s: resume in\n", __func__);
+			retval = ovt_tcm_resume(&tcm_hcd->pdev->dev);
+			tcm_hcd->fb_ready++;
+			LOGI(tcm_hcd->pdev->dev.parent, "%s: resume out\n", __func__);
 		}
 	}
 
@@ -4113,18 +4334,27 @@ static int ovt_tcm_probe(struct platform_device *pdev)
 		goto err_enable_regulator;
 	}
 
-    retval = ovt_tcm_config_gpio(tcm_hcd);
-    if (retval < 0) {
-        LOGE(tcm_hcd->pdev->dev.parent,
-             "Failed to configure GPIO's\n");
-        goto err_config_gpio;
-    }
+	memset(&ovt_xiaomi_touch_interfaces, 0, sizeof(ovt_xiaomi_touch_interfaces));
+	ovt_xiaomi_touch_interfaces.palm_sensor_write = ovt_palm_sensor_write;
+	xiaomitouch_register_modedata(&ovt_xiaomi_touch_interfaces);
 
-	/* detect the type of touch controller */
+	retval = ovt_tcm_config_gpio(tcm_hcd);
+	if (retval < 0) {
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"Failed to configure GPIO's\n");
+		xiaomi_touch_mievent_report_int(0x365c07eb, 1,
+				"TpParamParseFail", "omnivision", 1);
+		goto err_config_gpio;
+	}
+
+	ovt_lct_tp_init(tcm_hcd);
+
 	retval = ovt_tcm_sensor_detection(tcm_hcd);
 	if (retval < 0) {
 		LOGE(tcm_hcd->pdev->dev.parent,
 				"Failed to detect the sensor\n");
+		xiaomi_touch_mievent_report_int(0x365c07e9, 0,
+				"TpTransferErr", "omnivision", -1);
 		goto err_sysfs_create_dir;
 	}
 
@@ -4186,18 +4416,9 @@ static int ovt_tcm_probe(struct platform_device *pdev)
 		}
 	}
 
-#ifdef CONFIG_FB
-    tcm_hcd->fb_notifier.notifier_call = ovt_tcm_fb_notifier_cb;
-    //retval = fb_register_client(&tcm_hcd->fb_notifier);
-    if (retval < 0) {
-        LOGE(tcm_hcd->pdev->dev.parent,
-             "Failed to register FB notifier client\n");
-    }
-#endif
-
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	tcm_hcd->disp_notifier.notifier_call = td4160_tcm_disp_notifier_callback;
-	if (mtk_disp_notifier_register("Touch", &tcm_hcd->disp_notifier))
+	if (mtk_disp_notifier_register("ov_ts_notifier", &tcm_hcd->disp_notifier))
 		LOGI(tcm_hcd->pdev->dev.parent, "Failed to register disp notifier\n");
 	else
 		disp_notify_reg_flag = true;
@@ -4293,8 +4514,14 @@ err_enable_irq:
 
 err_create_run_kthread:
 #endif
-#ifdef CONFIG_FB
-	fb_unregister_client(&tcm_hcd->fb_notifier);
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+	if (disp_notify_reg_flag) {
+		if (mtk_disp_notifier_unregister(&tcm_hcd->disp_notifier))
+			LOGI(tcm_hcd->pdev->dev.parent,
+					"error occurred when unregister disp_notifier\n");
+		else
+			disp_notify_reg_flag = false;
+	}
 #endif
 
 err_sysfs_create_dynamic_config_file:
@@ -4315,6 +4542,7 @@ err_sysfs_create_file:
 	kobject_put(tcm_hcd->sysfs_dir);
 
 err_sysfs_create_dir:
+	ovt_lct_tp_uninit();
 
 	if (bdata->irq_gpio >= 0)
 		ovt_tcm_set_gpio(tcm_hcd, bdata->irq_gpio, false, 0, 0);
@@ -4416,9 +4644,7 @@ static int ovt_tcm_remove(struct platform_device *pdev)
 	}
 #endif
 
-#ifdef CONFIG_FB
-	fb_unregister_client(&tcm_hcd->fb_notifier);
-#endif
+	ovt_lct_tp_uninit();
 
 	for (idx = 0; idx < ARRAY_SIZE(dynamic_config_attrs); idx++) {
 		sysfs_remove_file(tcm_hcd->dynamnic_config_sysfs_dir,

@@ -29,22 +29,21 @@
  * DOLLARS.
  */
 
-#include <linux/gpio.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
-#include <asm/uaccess.h>
 #include <linux/gpio.h>
 #include <linux/kthread.h>
 #include <linux/interrupt.h>
 #include <linux/regulator/consumer.h>
 #include <linux/hrtimer.h>
-#include <linux/rtc.h>
 #include <linux/vmalloc.h>
 
 #include "omnivision_tcm_core.h"
 #include "omnivision_tcm_testing.h"
+#include "../lct_tp/lct_tp_selftest.h"
+#include "../xiaomi/xiaomi_touch.h"
 
 #define SYSFS_DIR_NAME "testing"
 
@@ -210,8 +209,6 @@ static int testing_pt07_dynamic_range(void);
 
 static int testing_pt10_noise(void);
 
-static int testing_do_testing(void);
-
 static int testing_pt11_open_detection(void);
 
 static int testing_raw_data(void);
@@ -283,67 +280,6 @@ testing_sysfs_raw_delta_show(raw_data)
 testing_sysfs_raw_delta_show(delta_data)
 
 
-
-static int ovt_tcm_get_thr_from_csvfile(void)
-{
-	int ret = 0;
-	unsigned int rows = 0;
-	unsigned int cols = 0;
-	struct ovt_tcm_app_info *app_info = NULL;
-	struct ovt_tcm_test_threshold *threshold = &(testing_hcd->testing_csv_threshold);
-	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
-
-	char file_path[256] = {0};
-
-	strncpy(file_path, "/data/ovt_tcm_", sizeof(file_path));
-	// if (tcm_hcd->hw_if->bdata->project_id) {
-	// 	strncat(file_path, tcm_hcd->hw_if->bdata->project_id, sizeof(file_path));
-	// }
-	strncat(file_path, "cap_limits.csv", sizeof(file_path) - strlen(file_path) - 1);
-
-	app_info = &tcm_hcd->app_info;
-	rows = le2_to_uint(app_info->num_of_image_rows);
-	cols = le2_to_uint(app_info->num_of_image_cols);
-
-	printk("ovt tcm csv parser: rows: %d, cols: %d file_path:%s", rows, cols, file_path);
-	ret = ovt_tcm_parse_csvfile(file_path, CSV_RAW_DATA_MIN_ARRAY,
-			threshold->raw_data_min_limits, rows, cols);
-	if (ret) {
-		printk("ovt tcm csv parser: %s: Failed get %s \n", __func__, CSV_RAW_DATA_MIN_ARRAY);
-		return ret;
-	}
-
-	ret = ovt_tcm_parse_csvfile(file_path, CSV_RAW_DATA_MAX_ARRAY,
-			threshold->raw_data_max_limits, rows, cols);
-	if (ret) {
-		printk("ovt tcm csv parser: %s: Failed get %s \n", __func__, CSV_RAW_DATA_MAX_ARRAY);
-		return ret;
-	}
-
-	ret = ovt_tcm_parse_csvfile(file_path, CSV_OPEN_SHORT_MIN_ARRAY,
-			threshold->open_short_min_limits, rows, cols);
-	if (ret) {
-		printk("ovt tcm csv parser: %s: Failed get %s \n", __func__, CSV_OPEN_SHORT_MIN_ARRAY);
-		return ret;
-	}
-
-	ret = ovt_tcm_parse_csvfile(file_path, CSV_OPEN_SHORT_MAX_ARRAY,
-			threshold->open_short_max_limits, rows, cols);
-	if (ret) {
-		printk("ovt tcm csv parser: %s: Failed get %s \n", __func__, CSV_OPEN_SHORT_MAX_ARRAY);
-		return ret;
-	}
-
-	ret = ovt_tcm_parse_csvfile(file_path, CSV_LCD_NOISE_ARRAY,
-			threshold->lcd_noise_max_limits, rows, cols);
-	if (ret) {
-		printk("ovt tcm csv parser: %s: Failed get %s \n", __func__, CSV_LCD_NOISE_ARRAY);
-		return ret;
-	}
-
-	printk("ovt tcm csv parser: %s: success \n", __func__);
-	return 0;
-}
 
 static ssize_t testing_sysfs_do_testing_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1425,10 +1361,203 @@ exit:
 			"Result = %s\n", (testing_hcd->result)?"pass":"fail");
 	return retval;
 }
-#define LIMIT_FROM_CSV_FILE 1
+static const int pt7_low_limits_new[32][18] = {
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700 },
+	{ 700, 700, 700, 700, 700, 700, 700, 700, 0, 0, 700, 700, 700, 700, 700, 700, 700, 700 },
+};
 
+static const int pt7_hi_limits_new[32][18] = {
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+	{ 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 65535, 65535, 1300, 1300, 1300, 1300, 1300, 1300, 1300, 1300 },
+};
 
-static int testing_do_test_item(enum test_code test_item, int limit_rows, int limit_cols, int* limit_data_low, int *limit_data_high, struct file *fp, char *output_str, int str_size)
+static const int pt10_high_limits_new[32][18] = {
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+};
+
+static const int pt11_low_limits_new[32][18] = {
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+	{ -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60, -60 },
+};
+
+static const int pt11_hi_limits_new[32][18] = {
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+};
+
+static void testing_append_output(char *output_str, int str_size,
+		const char *fmt, ...)
+{
+	va_list args;
+	size_t len;
+
+	if (!output_str || str_size <= 0)
+		return;
+
+	len = strlen(output_str);
+	if (len >= (size_t)str_size)
+		return;
+
+	va_start(args, fmt);
+	vsnprintf(output_str + len, str_size - len, fmt, args);
+	va_end(args);
+}
+
+static int testing_do_test_item(enum test_code test_item,
+		const int (*limit_data_low)[18],
+		const int (*limit_data_high)[18],
+		char *output_str, int str_size)
 {
 	int retval;
 	int data, max_data, min_data, ave_data, sum_data;
@@ -1438,12 +1567,10 @@ static int testing_do_test_item(enum test_code test_item, int limit_rows, int li
 	unsigned int col;
 	unsigned int rows;
 	unsigned int cols;
-
 	struct ovt_tcm_app_info *app_info;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
 
-	LOGN(tcm_hcd->pdev->dev.parent,
-			"Start testing\n");
+	LOGN(tcm_hcd->pdev->dev.parent, "Start testing\n");
 
 	testing_hcd->result = false;
 	app_info = &tcm_hcd->app_info;
@@ -1456,254 +1583,287 @@ static int testing_do_test_item(enum test_code test_item, int limit_rows, int li
 	ave_data = 0;
 	sum_data = 0;
 
-	if (fp) {
-		ovt_tcm_store_to_file(fp, "\n%s do test item %d enter\n", __func__, test_item);
-	}
-	if (output_str) {
-		snprintf(output_str + strlen(output_str), str_size - strlen(output_str), 
+	testing_append_output(output_str, str_size,
 			"%s do test item %d enter\n", __func__, test_item);
-	}
 
 	retval = testing_run_prod_test_item(test_item);
 	if (retval < 0) {
+		LOGE(tcm_hcd->pdev->dev.parent, "Failed to run test\n");
+		testing_append_output(output_str, str_size,
+				"%s fail to get cmd response of %d\n",
+				__func__, test_item);
+		goto exit;
+	}
+
+	if (rows > 32 || cols > 18) {
 		LOGE(tcm_hcd->pdev->dev.parent,
-				"Failed to run test\n");
-		snprintf(output_str + strlen(output_str), str_size - strlen(output_str), 
-			"%s fail to get cmd response of %d\n", __func__, test_item);
+				"incorrect cols and rows size of item:%d\n",
+				test_item);
+		testing_append_output(output_str, str_size,
+				"%s incorrect cols and rows size of item:%d\n",
+				__func__, test_item);
+		testing_hcd->result = false;
 		goto exit;
 	}
 
 	LOCK_BUFFER(testing_hcd->resp);
 
+	if (testing_hcd->resp.data_length < rows * cols * 2) {
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"Insufficient response data for item:%d\n",
+				test_item);
+		testing_hcd->result = false;
+		UNLOCK_BUFFER(testing_hcd->resp);
+		goto exit;
+	}
 
 	idx = 0;
 	buf = testing_hcd->resp.buf;
 	testing_hcd->result = true;
 
-	if ((limit_cols < cols) || (limit_rows < rows)) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-			"incorrect cols and rows size of item:%d\n", test_item);
-		snprintf(output_str + strlen(output_str), str_size - strlen(output_str), 
-			"%s incorrect cols and rows size of item:%d\n", __func__, test_item);
-		testing_hcd->result = false;
-		goto exit;
-	}
-
-
 	for (row = 0; row < rows; row++) {
 		for (col = 0; col < cols; col++) {
-			int limit_low, limit_high;
-			if ((limit_cols == 1) && (limit_rows == 1)) {
-				if (limit_data_low)
-					limit_low = limit_data_low[0];
-				if (limit_data_high)
-				limit_high = limit_data_high[0];
-			} else {
-				if (limit_data_low)
-					limit_low = limit_data_low[row * limit_rows + col];
-				if (limit_data_high)
-					limit_high = limit_data_high[row * limit_rows + col];				
-			}
-			if (test_item == TEST_PT10_DELTA_NOISE || test_item == TEST_PT11_OPEN_DETECTION) {
+			if (test_item == TEST_PT10_DELTA_NOISE ||
+					test_item == TEST_PT11_OPEN_DETECTION)
 				data = (short)le2_to_uint(&buf[idx * 2]);
-			} else {
+			else
 				data = (unsigned short)le2_to_uint(&buf[idx * 2]);
-			}
+
 			if (idx == 0) {
 				min_data = data;
 				max_data = data;
 			}
-			if (fp) {
-				ovt_tcm_store_to_file(fp, "%d,", data);
-			}
-			if (output_str) {
-				snprintf(output_str + strlen(output_str), str_size - strlen(output_str),  "%d,", data);
-			}
-			if ((idx + 1) % cols == 0 && idx != 0) {
-				if (fp)
-					ovt_tcm_store_to_file(fp, "\n");
-				if (output_str) {
-					snprintf(output_str + strlen(output_str), str_size - strlen(output_str),  "\n");
-				}
-			}
-			sum_data += data;
 
-			if (data > max_data) {
+			testing_append_output(output_str, str_size, "%d,", data);
+			if ((idx + 1) % cols == 0 && idx != 0)
+				testing_append_output(output_str, str_size, "\n");
+
+			sum_data += data;
+			if (data > max_data)
 				max_data = data;
-			}
-			if (data < min_data) {
+			if (data < min_data)
 				min_data = data;
-			}
-			if (limit_data_low) {
-				if (data < limit_low) {
-					testing_hcd->result = false;
-					LOGE(tcm_hcd->pdev->dev.parent,
+
+			if (limit_data_low && data < limit_data_low[row][col]) {
+				testing_hcd->result = false;
+				LOGE(tcm_hcd->pdev->dev.parent,
 						"fail at (%2d, %2d) data = %5d, limit = %4d\n",
-					row, col, data, limit_data_low[row * limit_rows + col]);					
-				}
+						row, col, data, limit_data_low[row][col]);
 			}
-			if (limit_data_high) {
-				if (data > limit_high) {
-					testing_hcd->result = false;
-					LOGE(tcm_hcd->pdev->dev.parent,
+			if (limit_data_high && data > limit_data_high[row][col]) {
+				testing_hcd->result = false;
+				LOGE(tcm_hcd->pdev->dev.parent,
 						"fail at (%2d, %2d) data = %5d, limit = %4d\n",
-					row, col, data, limit_data_high[row * limit_rows + col]);		
-				}
+						row, col, data, limit_data_high[row][col]);
 			}
 			idx++;
 		}
 	}
+
 	if (idx != 0)
 		ave_data = sum_data / idx;
+
 	UNLOCK_BUFFER(testing_hcd->resp);
 
-	retval = 0;
-
 exit:
-
-	if (fp) {
-		ovt_tcm_store_to_file(fp, "\n%s do test item min:%d  max:%d ave:%d\n", __func__, min_data, max_data, ave_data);
-		ovt_tcm_store_to_file(fp, "\n%s do test item %d end, result is %s\n", __func__, test_item, (testing_hcd->result)?"pass":"fail");
-	}
-	if (output_str) {
-		snprintf(output_str + strlen(output_str), str_size - strlen(output_str), "\n%s do test item min:%d  max:%d ave:%d\n", __func__, min_data, max_data, ave_data);
-		snprintf(output_str + strlen(output_str), str_size - strlen(output_str), "\n%s do test item %d end, result is %s\n", __func__, test_item, (testing_hcd->result)?"pass":"fail");
-	}
+	testing_append_output(output_str, str_size,
+			"\n%s do test item min:%d  max:%d ave:%d\n",
+			__func__, min_data, max_data, ave_data);
+	testing_append_output(output_str, str_size,
+			"\n%s do test item %d end, result is %s\n",
+			__func__, test_item,
+			testing_hcd->result ? "pass" : "fail");
 	LOGN(tcm_hcd->pdev->dev.parent,
-			"test item:%d Result = %s\n", test_item, (testing_hcd->result)?"pass":"fail");
-	return (testing_hcd->result)? 0 : -1;
+			"test item:%d Result = %s\n", test_item,
+			testing_hcd->result ? "pass" : "fail");
+	return testing_hcd->result ? 0 : -1;
 }
 
-#ifdef LIMIT_FROM_CSV_FILE
 static char *g_testing_output_buf;
-#define OUTPUT_TO_CSV_STRING_LEN 100*1024
-#endif
+#define OUTPUT_TO_CSV_STRING_LEN (100 * 1024)
 
-static int testing_do_testing(void)
+int testing_do_testing(void)
 {
-#if 0
 	int retval;
+	int error_count = 0;
 	struct ovt_tcm_hcd *tcm_hcd;
-    int error_count = 0;
 
-#ifdef LIMIT_FROM_CSV_FILE
-    uint8_t file_path[256];
-	struct file *fp = NULL;
-    mm_segment_t old_fs;
-	loff_t pos;
-    struct rtc_time rtc_now_time;
-#endif
+	if (IS_ERR_OR_NULL(testing_hcd) || !testing_hcd->tcm_hcd)
+		return -EINVAL;
 
 	tcm_hcd = testing_hcd->tcm_hcd;
 
-#ifdef LIMIT_FROM_CSV_FILE
 	if (!g_testing_output_buf) {
 		g_testing_output_buf = vmalloc(OUTPUT_TO_CSV_STRING_LEN);
 		if (!g_testing_output_buf) {
 			LOGE(tcm_hcd->pdev->dev.parent,
-				"can not alloc buffer for g_testing_output_buf\n");
+					"can not alloc buffer for g_testing_output_buf\n");
 			return -1;
 		}
 	}
 	memset(g_testing_output_buf, 0, OUTPUT_TO_CSV_STRING_LEN);
 
-	snprintf(g_testing_output_buf + strlen(g_testing_output_buf), OUTPUT_TO_CSV_STRING_LEN - strlen(g_testing_output_buf), 
-		"start to do test,\n");
+	testing_append_output(g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN,
+			"start to do test,\n");
 
-
-	retval = ovt_tcm_get_thr_from_csvfile();
-	if (retval < 0) {
-		printk("ovt_tcm_get_thr_from_csvfile error, return\n");
-		snprintf(g_testing_output_buf + strlen(g_testing_output_buf), OUTPUT_TO_CSV_STRING_LEN - strlen(g_testing_output_buf), 
-		"ovt_tcm_get_thr_from_csvfile error\n");
+	retval = testing_do_test_item(TEST_PT7_DYNAMIC_RANGE,
+			pt7_low_limits_new, pt7_hi_limits_new,
+			g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
+	if (retval < 0)
 		error_count++;
-		goto sys_err;
-	}
-	retval = testing_do_test_item(TEST_PT7_DYNAMIC_RANGE, TX_NUM_MAX, RX_NUM_MAX, testing_hcd->testing_csv_threshold.raw_data_min_limits, 
-		testing_hcd->testing_csv_threshold.raw_data_max_limits, fp, g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
-	if (retval < 0) {
+
+	retval = testing_do_test_item(TEST_PT10_DELTA_NOISE,
+			NULL, pt10_high_limits_new,
+			g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
+	if (retval < 0)
 		error_count++;
-	}
 
-	retval = testing_do_test_item(TEST_PT10_DELTA_NOISE, TX_NUM_MAX, RX_NUM_MAX, NULL, 
-		testing_hcd->testing_csv_threshold.lcd_noise_max_limits, fp, g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
-	if (retval < 0) {
+	retval = testing_do_test_item(TEST_PT11_OPEN_DETECTION,
+			pt11_low_limits_new, pt11_hi_limits_new,
+			g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
+	if (retval < 0)
 		error_count++;
-	}
-	retval = testing_do_test_item(TEST_PT11_OPEN_DETECTION, TX_NUM_MAX, RX_NUM_MAX, testing_hcd->testing_csv_threshold.open_short_min_limits, 
-		testing_hcd->testing_csv_threshold.open_short_max_limits, fp, g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
-	if (retval < 0) {
-		error_count++;
-	}
 
-	rtc_time_to_tm(get_seconds(), &rtc_now_time);
-	if (error_count) {
-		//test fail result
-		sprintf(file_path, "/data/tp_%s_test_data_%02d%02d%02d-%02d%02d%02d-fail.csv", tcm_hcd->id_info.part_number,
-            (rtc_now_time.tm_year + 1900) % 100, rtc_now_time.tm_mon + 1, rtc_now_time.tm_mday,
-            rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
-	} else {
-		//test pass result
-		sprintf(file_path, "/data/tp_%s_test_data_%02d%02d%02d-%02d%02d%02d-success.csv", tcm_hcd->id_info.part_number,
-            (rtc_now_time.tm_year + 1900) % 100, rtc_now_time.tm_mon + 1, rtc_now_time.tm_mday,
-            rtc_now_time.tm_hour, rtc_now_time.tm_min, rtc_now_time.tm_sec);
-	}
-    
-    old_fs = get_fs();
-    set_fs(KERNEL_DS);
-    fp = filp_open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0);
-    if (IS_ERR_OR_NULL(fp)) {
-        printk("ovt tcm Open log file '%s' failed.\n", file_path);
-
-		snprintf(g_testing_output_buf + strlen(g_testing_output_buf), OUTPUT_TO_CSV_STRING_LEN - strlen(g_testing_output_buf), 
-			"can not open file:%s\n", file_path);
-        set_fs(old_fs);
-        goto sys_err;
-    }
-
-	pos = 0;
-	vfs_write(fp, g_testing_output_buf, strlen(g_testing_output_buf), &pos);
-	printk("g_testing_output_buf , strlen is %d\n", (int)strlen(g_testing_output_buf));
-	if (!IS_ERR_OR_NULL(fp)) {
-		printk("ovt tcm csv parser: filp close\n");
-		filp_close(fp, NULL);
-		fp = NULL;
-	}
-    set_fs(old_fs);
-
-sys_err:
-	if (error_count) {
+	if (error_count)
 		return -1;
-	}
-    return 0;
-#else
 
-	retval = testing_pt07_dynamic_range();
-	if (retval < 0) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Failed to run testing_pt07_dynamic_range\n");
-		error_count++;
-	}
-	retval = testing_pt10_noise();
-	if (retval < 0) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Failed to run testing_pt10_noise\n");
-		error_count++;
-	}
-	retval = testing_pt11_open_detection();
-	if (retval < 0) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Failed to run testing_pt11_open_detection\n");
-		error_count++;
-	}
-	if (error_count) {
-		return -1;
-	}
-    return 0;
-#endif
-#endif
-	pr_info("dummy for testing_do_testing\n");
 	return 0;
+}
+
+static int ovt_csv_show(struct seq_file *m, void *v)
+{
+	if (g_testing_output_buf)
+		seq_printf(m, "%s\n", g_testing_output_buf);
+	return 0;
+}
+
+static int ovt_csv_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, ovt_csv_show, pde_data(inode));
+}
+
+static const struct proc_ops ovt_proccsv_fops = {
+	.proc_open = ovt_csv_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+};
+
+static struct proc_dir_entry *g_ovt_csv_proc_entry;
+
+int lct_ovt_tp_selftest_callback(unsigned char cmd)
+{
+	int retval;
+
+	switch (cmd) {
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+		msleep(500);
+		retval = testing_do_testing();
+		if (retval < 0) {
+			pr_err("lct %s(%d): tp selftest Failed.\n", __func__, __LINE__);
+			return 1;
+		}
+		pr_info("lct %s(%d): tp selftest Passed.\n", __func__, __LINE__);
+		return 2;
+	default:
+		pr_info("lct %s(%d): touch selftest command: unknow.\n", __func__, __LINE__);
+		return 0;
+	}
+}
+
+static void lct_ovt_tp_data_dump_section(struct seq_file *m,
+		struct ovt_tcm_hcd *tcm_hcd, const char *title,
+		int (*collect_fn)(void))
+{
+	int retval;
+	unsigned int rows;
+	unsigned int cols;
+	unsigned int i;
+	unsigned int j;
+	int data_value;
+	unsigned char *report_data_buf;
+	struct ovt_tcm_app_info *app_info;
+
+	seq_printf(m, "\n%s\n", title);
+	mutex_lock(&tcm_hcd->extif_mutex);
+	retval = collect_fn();
+	if (retval < 0) {
+		LOGE(tcm_hcd->pdev->dev.parent, "Failed to collect %s\n", title);
+		goto unlock;
+	}
+
+	seq_printf(m, "#t_name data:  %d\n", tcm_hcd->id_info.version);
+	app_info = &tcm_hcd->app_info;
+	rows = le2_to_uint(app_info->num_of_image_rows);
+	cols = le2_to_uint(app_info->num_of_image_cols);
+	LOCK_BUFFER(testing_hcd->report);
+	report_data_buf = testing_hcd->report.buf;
+	if (!report_data_buf || testing_hcd->report.buf_size < rows * cols * 2) {
+		UNLOCK_BUFFER(testing_hcd->report);
+		goto unlock;
+	}
+	for (i = 0; i < rows; i++) {
+		for (j = 0; j < cols; j++) {
+			data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
+			seq_printf(m, "%4d, ", data_value);
+		}
+		seq_puts(m, "\n");
+	}
+	UNLOCK_BUFFER(testing_hcd->report);
+	seq_puts(m, "\n");
+
+unlock:
+	mutex_unlock(&tcm_hcd->extif_mutex);
+}
+
+static int lct_ovt_tp_data_dump_proc_show(struct seq_file *m, void *v)
+{
+	struct ovt_tcm_hcd *tcm_hcd;
+
+	if (IS_ERR_OR_NULL(testing_hcd) || !testing_hcd->tcm_hcd)
+		return -ENODEV;
+
+	tcm_hcd = testing_hcd->tcm_hcd;
+	lct_ovt_tp_data_dump_section(m, tcm_hcd, "RAW DATA", testing_raw_data);
+	lct_ovt_tp_data_dump_section(m, tcm_hcd, "DIFF DATA", testing_delta_data);
+	return 0;
+}
+
+static int lct_ovt_tp_data_dump_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, lct_ovt_tp_data_dump_proc_show, pde_data(inode));
+}
+
+static const struct proc_ops lct_ovt_tp_data_dump_fops = {
+	.proc_open = lct_ovt_tp_data_dump_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+};
+
+static struct proc_dir_entry *g_tp_data_dump_proc_entry;
+
+int lct_ovt_tp_data_dump_proc_init(void)
+{
+	g_tp_data_dump_proc_entry = proc_create("tp_data_dump", 0444, NULL,
+			&lct_ovt_tp_data_dump_fops);
+	if (IS_ERR_OR_NULL(g_tp_data_dump_proc_entry)) {
+		pr_err("proc_create tp_data_dump failed\n");
+		g_tp_data_dump_proc_entry = NULL;
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+void lct_ovt_tp_data_dump_proc_exit(void)
+{
+	if (g_tp_data_dump_proc_entry) {
+		proc_remove(g_tp_data_dump_proc_entry);
+		g_tp_data_dump_proc_entry = NULL;
+	}
 }
 
 static int testing_pt11_open_detection(void)
@@ -2011,6 +2171,12 @@ static int testing_init(struct ovt_tcm_hcd *tcm_hcd)
 		goto err_sysfs_create_bin_file;
 	}
 
+	g_ovt_csv_proc_entry = proc_create("ovt_test_csv", 0777, NULL,
+			&ovt_proccsv_fops);
+	if (!g_ovt_csv_proc_entry)
+		LOGE(tcm_hcd->pdev->dev.parent,
+				"Failed to create ovt_test_csv proc entry\n");
+
 	return 0;
 
 err_sysfs_create_bin_file:
@@ -2039,6 +2205,15 @@ static int testing_remove(struct ovt_tcm_hcd *tcm_hcd)
 
     if (IS_ERR_OR_NULL(testing_hcd))
 			goto exit;
+
+	if (g_ovt_csv_proc_entry) {
+		proc_remove(g_ovt_csv_proc_entry);
+		g_ovt_csv_proc_entry = NULL;
+	}
+	if (g_testing_output_buf) {
+		vfree(g_testing_output_buf);
+		g_testing_output_buf = NULL;
+	}
 
 	sysfs_remove_bin_file(testing_hcd->sysfs_dir, &bin_attr);
 

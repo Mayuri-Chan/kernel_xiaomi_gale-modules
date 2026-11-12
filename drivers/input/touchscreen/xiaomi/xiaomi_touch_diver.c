@@ -5,6 +5,7 @@
  @Description:
  ************************************************************************/
 #include "xiaomi_touch.h"
+#include <miev/mievent.h>
 
 static struct xiaomi_touch_pdata *touch_pdata;
 
@@ -156,8 +157,8 @@ int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data)
 	int ret = 0;
 	struct xiaomi_touch_interface *touch_data = NULL;
 
-	if (!touch_pdata)
-		ret = -ENOMEM;
+	if (!touch_pdata || !touch_pdata->touch_data || !data)
+		return -ENOMEM;
 
 	touch_data = touch_pdata->touch_data;
 	pr_info("%s\n", __func__);
@@ -183,6 +184,47 @@ int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data)
 }
 
 EXPORT_SYMBOL(xiaomitouch_register_modedata);
+
+void xiaomi_touch_mievent_report_int(int id, int panel_id, const char *fault_name,
+				     const char *vendor_name, long error_code)
+{
+	struct misight_mievent *event;
+
+	pr_info("mievent id:%d fault:%s panel:%d vendor:%s err:%ld\n",
+		id, fault_name, panel_id, vendor_name, error_code);
+	event = cdev_tevent_alloc(id);
+	if (!event) {
+		pr_err("cdev_tevent_alloc failed\n");
+		return;
+	}
+	cdev_tevent_add_int(event, "panel_id", (long)panel_id);
+	cdev_tevent_add_str(event, "fault_name", fault_name);
+	cdev_tevent_add_str(event, "vendor_name", vendor_name);
+	cdev_tevent_add_int(event, "error_code", error_code);
+	cdev_tevent_write(event);
+	cdev_tevent_destroy(event);
+}
+EXPORT_SYMBOL(xiaomi_touch_mievent_report_int);
+
+void xiaomi_touch_mievent_report_str(int id, int panel_id, const char *fault_name,
+				     const char *vendor_name)
+{
+	struct misight_mievent *event;
+
+	pr_info("mievent id:%d fault:%s panel:%d vendor:%s\n",
+		id, fault_name, panel_id, vendor_name);
+	event = cdev_tevent_alloc(id);
+	if (!event) {
+		pr_err("cdev_tevent_alloc failed\n");
+		return;
+	}
+	cdev_tevent_add_int(event, "panel_id", (long)panel_id);
+	cdev_tevent_add_str(event, "fault_name", fault_name);
+	cdev_tevent_add_str(event, "vendor_name", vendor_name);
+	cdev_tevent_write(event);
+	cdev_tevent_destroy(event);
+}
+EXPORT_SYMBOL(xiaomi_touch_mievent_report_str);
 
 int update_palm_sensor_value(int value)
 {

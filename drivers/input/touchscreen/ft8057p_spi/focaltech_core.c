@@ -98,9 +98,58 @@ static int tp_proximity_event = 0;
 static bool fts_proximity_suspend_flag = false;
 static struct fts_proximity_st fts_proximity_data;
 extern int tp_select_proximity;
-extern void set_lcd_reset_gpio_keep_high(bool en);
 extern int ps_send_touch_event(int32_t data);
 extern int fts_proximity_readdata(struct fts_ts_data *ts_data);
+
+static struct xiaomi_touch_interface xiaomi_touch_interfaces;
+
+int lct_fts_tp_gesture_callback(bool enable_tp)
+{
+    struct fts_ts_data *ts_data = fts_data;
+
+    if (ts_data->suspended) {
+        FTS_INFO("In suspend,not operation gesture mode:%s", enable_tp ? "On" : "Off");
+        return -1;
+    }
+
+    set_lct_tp_gesture_status(enable_tp);
+    ts_data->gesture_support = enable_tp;
+    fts_gesture_flag = enable_tp;
+    return 0;
+}
+
+int fts_palm_sensor_cmd(int value)
+{
+    int ret = 0;
+
+    ret = fts_write_reg(0x9A, value ? 1 : 0);
+    if (ret < 0) {
+        FTS_INFO("%s: write anti mis-touch cmd on...ERROR %08X !\n", __func__, ret);
+        return -EINVAL;
+    }
+
+    FTS_INFO("%s %d\n", __func__, value ? 1 : 0);
+    return 0;
+}
+
+int fts_palm_sensor_write(int value)
+{
+    int ret = 0;
+
+    if (value == 3) {
+        FTS_INFO("%s %d succeed\n", __func__, value);
+        update_palm_sensor_value(3);
+        return 0;
+    }
+
+    fts_data->palm_sensor_switch = value ? true : false;
+    ret = fts_palm_sensor_cmd(value);
+    if (ret < 0)
+        return ret;
+
+    FTS_INFO("%s %d succeed\n", __func__, value ? 1 : 0);
+    return 0;
+}
 
 static int fts_enter_proximity_mode(int mode)
 {
@@ -110,11 +159,11 @@ static int fts_enter_proximity_mode(int mode)
     buf_addr = FTS_REG_FACE_DEC_MODE_EN;
     if (mode) {
         buf_value = 0x01;
-        set_lcd_reset_gpio_keep_high(true);
+        set_prox_lcd_reset_gpio_keep_high(true);
         tp_proximity_event = 1;
     } else {
         buf_value = 0x00;
-        set_lcd_reset_gpio_keep_high(false);
+        set_prox_lcd_reset_gpio_keep_high(false);
         tp_proximity_event = 0;
     }
 
@@ -176,13 +225,12 @@ int fts_proximity_readdata(struct fts_ts_data *ts_data)
         buf_value = 1;
         proximity_status = PS_NEAR;
         fts_write_reg(buf_addr, buf_value);
-        ps_send_touch_event(1);
+        ps_send_touch_event(0);
     } else if (regvalue == 0x00) {
         buf_value = 0;
         proximity_status = PS_FAR_AWAY;
         fts_write_reg(buf_addr, buf_value);
-        ps_send_touch_event(0);
-        //fts_release_all_finger();
+        ps_send_touch_event(1);
     }
 
     FTS_DEBUG("fts_proximity_data.detect is %d,proximity_status = %d,regvalue = %d", fts_proximity_data.detect,proximity_status,regvalue);
@@ -1244,6 +1292,12 @@ static irqreturn_t fts_irq_handler(int irq, void *data)
     ts_data->intr_jiffies = jiffies;
     fts_prc_queue_work(ts_data);
     fts_irq_read_report(ts_data);
+    if (ts_data->palm_sensor_switch && fts_data) {
+        u8 palm_val = 0;
+
+        if (fts_read_reg(0x9B, &palm_val) >= 0 && (palm_val == 1 || palm_val == 0))
+            update_palm_sensor_value(palm_val);
+    }
     if (ts_data->touch_analysis_support && ts_data->ta_flag) {
         ts_data->ta_flag = 0;
         if (ts_data->ta_buf && ts_data->ta_size)
@@ -1909,6 +1963,12 @@ static int fts_ts_suspend(struct device *dev)
     }
 #endif
 
+    if (ts_data->palm_sensor_switch) {
+        update_palm_sensor_value(0);
+        fts_palm_sensor_cmd(0);
+        ts_data->palm_sensor_switch = false;
+    }
+
     fts_esdcheck_suspend(ts_data);
 
     if (ts_data->gesture_support) {
@@ -1955,6 +2015,10 @@ static int fts_ts_resume(struct device *dev)
     fts_release_all_finger();
 
     if ((!fts_proximity_resume()) && (fts_proximity_suspend_flag == true)) {
+        if (disable_irq_wake(ts_data->irq))
+            FTS_DEBUG("disable_irq_wake(irq:%d) fail", ts_data->irq);
+        if (ts_data->gesture_support)
+            fts_gesture_resume(ts_data);
         fts_proximity_suspend_flag = false;
         ts_data->suspended = false;
         return 0;
@@ -2004,6 +2068,9 @@ static int fts_ts_resume(struct device *dev)
 #else
         fts_irq_enable();
 #endif
+
+    if (ts_data->palm_sensor_switch)
+        fts_palm_sensor_cmd(ts_data->palm_sensor_switch);
 
 #if LCT_TP_USB_PLUGIN
 	if (g_touchscreen_usb_pulgin.valid)
@@ -2151,6 +2218,10 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         return -ENOMEM;
     }
 
+    memset(&xiaomi_touch_interfaces, 0, sizeof(struct xiaomi_touch_interface));
+    xiaomi_touch_interfaces.palm_sensor_write = fts_palm_sensor_write;
+    xiaomitouch_register_modedata(&xiaomi_touch_interfaces);
+
 #if FTS_PSENSOR_ENABLE
     fts_proximity_init();
 #endif
@@ -2162,6 +2233,7 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ret = fts_parse_dt(ts_data->dev, ts_data->pdata);
     if (ret) {
         FTS_ERROR("device-tree parse fail");
+        xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "focal", 2);
     }
 
     ts_data->ts_workqueue = create_singlethread_workqueue("fts_wq");
@@ -2196,6 +2268,7 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ret = fts_gpio_configure(ts_data);
     if (ret) {
         FTS_ERROR("configure the gpios fail");
+        xiaomi_touch_mievent_report_int(0x365c07eb, 0, "TpParamParseFail", "focal", 1);
         goto err_gpio_config;
     }
 
@@ -2214,6 +2287,7 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ret = fts_get_ic_information(ts_data);
     if (ret) {
         FTS_ERROR("not focal IC, unregister driver");
+        xiaomi_touch_mievent_report_int(0x365c07e9, 0, "TpTransferErr", "focal", ret);
         goto err_irq_req;
     }
 
@@ -2226,6 +2300,9 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ret = lct_tp_create_procfs(&lct_tp_fts_mifunc);
     if (ret < 0) {
         FTS_ERROR("lct_tp_create_procfs failed. ret=%d\n", ret);
+    }
+    if (init_lct_tp_gesture(lct_fts_tp_gesture_callback) < 0) {
+        FTS_ERROR("init_lct_tp_gesture Failed!");
     }
 #endif
 
@@ -2268,6 +2345,7 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ret = fts_fwupg_init(ts_data);
     if (ret) {
         FTS_ERROR("init fw upgrade fail");
+        xiaomi_touch_mievent_report_int(0x365c07ea, 0, "TpFirmwareLoadFail", "focal", ret);
     }
 
     if (ts_data->ts_workqueue) {
@@ -2327,6 +2405,7 @@ int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 
 #ifdef LCT_TP_COMMON
     lct_remove_procfs();
+    uninit_lct_tp_gesture();
 #endif
 
     fts_remove_sysfs(ts_data);

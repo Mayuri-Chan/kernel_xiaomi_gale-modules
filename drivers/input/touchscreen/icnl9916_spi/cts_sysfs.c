@@ -13,6 +13,7 @@
 #if IS_ENABLED(CONFIG_TOUCHSCREEN_COMMON)
 #include "../lct_tp/tp_common.h"
 #endif
+#include "../xiaomi/xiaomi_touch.h"
 
 #ifdef CONFIG_CTS_SYSFS
 
@@ -1235,6 +1236,7 @@ static ssize_t open_test_show(struct device *dev,
             "Open test has %d nodes FAIL, min: %u, ELAPSED TIME: %lldms\n",
             ret, min, ktime_to_ms(delta_time));
     } else if (ret < 0) {
+        xiaomi_touch_mievent_report_int(0x365c0bd1, 0, "TpOpenTestFail", "chipone", ret);
         return scnprintf(buf, PAGE_SIZE,
             "Open test FAIL %d(%s), ELAPSED TIME: %lldms\n",
             ret, cts_strerror(ret), ktime_to_ms(delta_time));
@@ -1303,6 +1305,7 @@ static ssize_t short_test_show(struct device *dev,
             "Short test has %d nodes FAIL, min: %u, ELAPSED TIME: %lldms\n",
             ret, min, ktime_to_ms(delta_time));
     } else if (ret < 0) {
+        xiaomi_touch_mievent_report_int(0x365c0bd2, 0, "TpShortTestFail", "chipone", ret);
         return scnprintf(buf, PAGE_SIZE,
             "Short test FAIL %d(%s), ELAPSED TIME: %lldms\n",
             ret, cts_strerror(ret), ktime_to_ms(delta_time));

@@ -1926,6 +1926,12 @@ int cts_oem_init(struct chipone_ts_data *cts_data)
 		cts_err("init_lct_tp_selftest Succeeded!");
 	}
 
+	ret = init_lct_tp_proximity_switch(cts_set_proximity_switch);
+	if (ret < 0) {
+		cts_err("init_lct_tp_proximity_switch Failed! ret = %d", ret);
+		goto err_init_lct_tp_proximity_switch_fail;
+	}
+
     cts_data->oem_data = oem_data;
     oem_data->cts_data = cts_data;
     return 0;
@@ -1937,7 +1943,10 @@ err_init_lct_tp_grip_area_fail:
 
 err_init_lct_tp_selftest_fail:
     uninit_lct_tp_selftest();
- 
+
+err_init_lct_tp_proximity_switch_fail:
+    uninit_lct_tp_proximity_switch();
+
 free_oem_data:
     kfree(oem_data);
     return ret;

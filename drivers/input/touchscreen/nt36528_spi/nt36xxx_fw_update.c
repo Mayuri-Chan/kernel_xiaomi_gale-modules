@@ -662,6 +662,7 @@ int32_t nvt_update_firmware(char *firmware_name)
 
 	ret = update_firmware_request(firmware_name);
 	if (ret) {
+		xiaomi_touch_mievent_report_str(0x365c07ea, 0, "TpFirmwareLoadFail", "novatek");
 		NVT_ERR("update_firmware_request failed. (%d)\n", ret);
 		goto request_firmware_fail;
 	}
@@ -677,6 +678,7 @@ int32_t nvt_update_firmware(char *firmware_name)
 	else
 		ret = nvt_download_firmware();
 	if (ret) {
+		xiaomi_touch_mievent_report_str(0x365c07ea, 0, "TpFirmwareLoadFail", "novatek");
 		NVT_ERR("Download Firmware failed. (%d)\n", ret);
 		goto download_fail;
 	}

@@ -728,6 +728,7 @@ extern int cts_read_sram_normal_mode(const struct cts_device *cts_dev,
         u32 addr, void *dst, size_t len, int retry, int delay);
 
 #ifdef CFG_CTS_PALM_DETECT
+extern struct chipone_ts_data *palm_sensor_cts_data;
 extern int cts_palm_sensor_write(int cts_palm_switch);
 #endif
 
@@ -865,9 +866,11 @@ extern bool cts_gesture_flag;
 extern int tp_select_proximity;
 extern int32_t	cts_proximity_en;
 extern char touch_lcm_name[64];
+extern int cts_set_proximity_switch(bool prox_switch);
 extern int cts_enable_proximity_mode(struct cts_device *cts_dev);
 extern int cts_exit_proximity_mode(struct cts_device *cts_dev);
-extern void set_lcd_reset_gpio_keep_high(bool en);
+extern void set_prox_lcd_reset_gpio_keep_high4(bool en);
+extern void set_lcd_reset_gpio_keep_high_4th(bool en);
 extern int ps_send_touch_event(int32_t data);
 
 #endif /* CTS_CORE_H */

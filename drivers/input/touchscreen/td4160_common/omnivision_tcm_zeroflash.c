@@ -32,6 +32,7 @@
 #include <linux/crc32.h>
 #include <linux/firmware.h>
 #include "omnivision_tcm_core.h"
+#include "../xiaomi/xiaomi_touch.h"
 
 #define ENABLE_SYS_ZEROFLASH true
 
@@ -512,7 +513,6 @@ static int zeroflash_parse_fw_image(void)
 	return 0;
 }
 
-extern char td4160_firmware_name[256];
 static int zeroflash_get_fw_image(void)
 {
 	int retval;
@@ -527,13 +527,15 @@ static int zeroflash_get_fw_image(void)
 
 	while(retry_cnt--) {
 		retval = request_firmware(&zeroflash_hcd->fw_entry,
-				td4160_firmware_name,
+				"omnivision_hdl_firmware.img",
 				tcm_hcd->pdev->dev.parent);
 		if (retval < 0) {
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to request %s, retry_cnt:%d\n",
-					td4160_firmware_name, retry_cnt);
+					"omnivision_hdl_firmware.img", retry_cnt);
 			if (retry_cnt == 0) {
+				xiaomi_touch_mievent_report_str(0x365c07ea, 0,
+						"TpFirmwareLoadFail", "omnivision");
 				return retval;
 			}
 			msleep(1000);

@@ -2,6 +2,7 @@ config TOUCHSCREEN_CHIPONE
 	tristate "Chipone ICNL9916 SPI touchscreen for Gale"
 	depends on INPUT_TOUCHSCREEN && MACH_GALE && SPI && OF && GPIOLIB
 	depends on DRM_MEDIATEK_V2
+	depends on DRM_PANEL_C3UV_42_0F_0D_VDO
 	select TOUCHSCREEN_COMMON
 	default m
 	help

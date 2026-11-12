@@ -32,6 +32,7 @@
 #include "omnivision_tcm_core.h"
 #include <linux/spi/spidev.h>
 #include "../lct_tp/lct_tp_common.h"
+#include "../xiaomi/xiaomi_touch.h"
 
 #include <linux/platform_data/spi-mt65xx.h>  //具体哪一个平台文件请修改
 
@@ -300,6 +301,8 @@ static int parse_dt(struct device *dev, struct ovt_tcm_board_data *bdata)
 		if (retval < 0) {
 			LOGE(dev,
 					"Unable to read omnivision,ubl-byte-delay-us property\n");
+			xiaomi_touch_mievent_report_int(0x365c07eb, 0,
+					"TpParamParseFail", "omnivision", 2);
 			return retval;
 		} else {
 			bdata->ubl_byte_delay_us = value;
@@ -696,10 +699,14 @@ static int ovt_tcm_spi_probe(struct spi_device *spi)
 	hw_if.bus_io = &bus_io;
 
 	spi->bits_per_word = 8;
-	
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-	spi->cs_setup.value = 5; //delay 5
-	spi->cs_setup.unit = 0;  //delay us
+	spi->cs_setup.value = 1;
+	spi->cs_setup.unit = 0;
+	spi->cs_hold.value = 1;
+	spi->cs_hold.unit = 0;
+	spi->cs_inactive.value = 1;
+	spi->cs_inactive.unit = 0;
 #endif
 
 #if 0

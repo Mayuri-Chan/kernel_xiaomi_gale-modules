@@ -61,7 +61,7 @@
 *****************************************************************************/
 #if IS_ENABLED(CONFIG_SPI_MT65XX)
 const struct mtk_chip_config spi_ctrdata1 = {
-	.cs_setuptime = 250,
+	.cs_setuptime = 0,
 };
 #endif
 
@@ -452,6 +452,12 @@ static int fts_ts_probe(struct spi_device *spi)
     spi->mode = SPI_MODE_0;
     spi->max_speed_hz = 6000000;
     spi->bits_per_word = 8;
+    spi->cs_setup.value = 1;
+    spi->cs_setup.unit = SPI_DELAY_UNIT_USECS;
+    spi->cs_hold.value = 1;
+    spi->cs_hold.unit = SPI_DELAY_UNIT_USECS;
+    spi->cs_inactive.value = 1;
+    spi->cs_inactive.unit = SPI_DELAY_UNIT_USECS;
     ret = spi_setup(spi);
     if (ret < 0) {
         FTS_ERROR("spi setup fail");
@@ -473,11 +479,6 @@ static int fts_ts_probe(struct spi_device *spi)
     ts_data->dummy_byte = SPI_DUMMY_BYTE;
     spi_set_drvdata(spi, ts_data);
 
-#if IS_ENABLED(CONFIG_SPI_MT65XX)
-    memcpy(&ts_data->spi_ctrl, &spi_ctrdata1, sizeof(struct mtk_chip_config));
-    ts_data->spi->controller_data = (void *)&ts_data->spi_ctrl;
-#endif
-
     ret = fts_ts_probe_entry(ts_data);
     if (ret) {
         FTS_ERROR("Touch Screen(SPI BUS) driver probe fail");
@@ -487,6 +488,9 @@ static int fts_ts_probe(struct spi_device *spi)
     }
 
     tp_select_proximity = 2;
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+    foc_ts_esd_resume_probe = true;
+#endif
     FTS_INFO("Touch Screen(SPI BUS) driver prboe successfully");
     return 0;
 }
@@ -500,6 +504,9 @@ static int fts_ts_remove(struct spi_device *spi)
     struct fts_ts_data *ts_data = spi_get_drvdata(spi);
     FTS_FUNC_ENTER();
     if (ts_data) {
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+        foc_ts_esd_resume_probe = false;
+#endif
         fts_ts_remove_entry(ts_data);
         spi_set_drvdata(spi, NULL);
         kfree_safe(ts_data);
@@ -581,15 +588,19 @@ static int __init __maybe_unused lct_tp_fts_is_lockdown_info_detect(char *str)
 __setup("tp_lockdown_info=", lct_tp_fts_is_lockdown_info_detect);
 #endif
 
+static bool fts_spi_driver_registered;
+
 static int __init fts_ts_spi_init(void)
 {
     int ret = 0;
     lct_tp_get_panel_info();
      if ((strcmp(touch_lcm_name, "dsi_panel_c3uv_35_03_0b_vdo")) != 0) {
-     return -1;
+     return 0;
      }
     FTS_FUNC_ENTER();
     ret = spi_register_driver(&fts_ts_spi_driver);
+    if (!ret)
+        fts_spi_driver_registered = true;
     if ( ret != 0 ) {
         FTS_ERROR("Focaltech touch screen driver init failed!");
     }
@@ -599,7 +610,8 @@ static int __init fts_ts_spi_init(void)
 
 static void __exit fts_ts_spi_exit(void)
 {
-    spi_unregister_driver(&fts_ts_spi_driver);
+    if (fts_spi_driver_registered)
+        spi_unregister_driver(&fts_ts_spi_driver);
 }
 
 module_init(fts_ts_spi_init);

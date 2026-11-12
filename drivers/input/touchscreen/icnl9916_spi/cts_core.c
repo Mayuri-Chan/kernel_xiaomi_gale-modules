@@ -12,6 +12,11 @@
 #include "cts_tcs.h"
 #include "../lct_tp/lct_tp_common.h"
 #include "../lct_tp/lct_tp_selftest.h"
+#include "../xiaomi/xiaomi_touch.h"
+
+struct chipone_ts_data *palm_sensor_cts_data;
+static int palm_sensor_write_value;
+static bool palm_sensor_write_record;
 
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_i2c_writeb(const struct cts_device *cts_dev,
@@ -1415,10 +1420,38 @@ void cts_show_fw_log(struct cts_device *cts_dev)
 }
 #endif
 
+#ifdef CFG_CTS_PALM_DETECT
+int cts_palm_sensor_write(int cts_palm_switch)
+{
+    struct chipone_ts_data *cts_data = palm_sensor_cts_data;
+    int ret;
+
+    palm_sensor_write_value = cts_palm_switch;
+    palm_sensor_write_record = true;
+
+    cts_info("palm_sensor_write_record=%d, palm_sensor_write_value=%d",
+        palm_sensor_write_record, cts_palm_switch);
+
+    if (!cts_data || (unsigned int)cts_palm_switch >= 2)
+        return 0;
+
+    cts_lock_device(&cts_data->cts_dev);
+    ret = cts_tcs_set_pocket_palm_mode(&cts_data->cts_dev, cts_palm_switch);
+    cts_unlock_device(&cts_data->cts_dev);
+    if (ret) {
+        cts_err("Set pocket palm mode failed %d", ret);
+        return -EIO;
+    }
+
+    return 0;
+}
+EXPORT_SYMBOL_GPL(cts_palm_sensor_write);
+#endif
+
 #ifdef CONFIG_CTS_TP_PROXIMITY
 int32_t	cts_proximity_en = 0;
 
-int32_t cts_set_proximity_switch(uint8_t prox_switch)
+int cts_set_proximity_switch(bool prox_switch)
 {
     int ret = 0;
 
@@ -1429,12 +1462,12 @@ int32_t cts_set_proximity_switch(uint8_t prox_switch)
     }
 
     if(1 == prox_switch) {
-        set_lcd_reset_gpio_keep_high(true);
+        set_prox_lcd_reset_gpio_keep_high4(true);
         cts_proximity_en = 1;
         cts_enable_proximity_mode(&g_cts_data->cts_dev);
     }
     else if(0 == prox_switch) {
-        set_lcd_reset_gpio_keep_high(false);
+        set_prox_lcd_reset_gpio_keep_high4(false);
         cts_proximity_en = 0;
         cts_exit_proximity_mode(&g_cts_data->cts_dev);
     }
@@ -1520,16 +1553,14 @@ int cts_irq_handler(struct cts_device *cts_dev)
             touch_info->vkey_state, touch_info->num_msg);
 
 #ifdef CFG_CTS_PALM_DETECT
-    //cts_info("CFG_CTS_PALM_ID: %d, touch_info->vkey_state:%d",CFG_CTS_PALM_ID, touch_info->vkey_state);
-    if (CFG_CTS_PALM_ID == touch_info->vkey_state) {
-        cts_report_palm_event(cts_dev->pdata);
-        //cts_info("pocket_palm near");
-        cts_info("touch_info->vkey_state:%d",touch_info->vkey_state);
-        cts_plat_release_all_touch(cts_dev->pdata);
-        return 0;
+    if (palm_sensor_write_value == 1) {
+        if (CFG_CTS_PALM_ID == touch_info->vkey_state) {
+            update_palm_sensor_value(1);
+            cts_info("touch_info->vkey_state:%d", touch_info->vkey_state);
+            cts_plat_release_all_touch(cts_dev->pdata);
+            return 0;
         }
-    else {
-        cts_info("touch_info->vkey_state:%d",touch_info->vkey_state);
+        update_palm_sensor_value(0);
     }
 #endif
 
@@ -1543,7 +1574,7 @@ int cts_irq_handler(struct cts_device *cts_dev)
                     cts_dev->rtdata.proximity_num = 0;
                     cts_dev->rtdata.proximity_status = true;
                     cts_handle_proximity_event(true);
-                    ps_send_touch_event(1); //near
+                    ps_send_touch_event(0);
                     return 0;
                 }
             } else if (cts_dev->rtdata.proximity_status
@@ -1551,7 +1582,7 @@ int cts_irq_handler(struct cts_device *cts_dev)
                 cts_dev->rtdata.proximity_num = 0;
                 cts_dev->rtdata.proximity_status = false;
                 cts_handle_proximity_event(false);
-                ps_send_touch_event(0);//far
+                ps_send_touch_event(1);
                 cts_plat_release_all_touch(cts_dev->pdata);
                 return 0;
             }
@@ -1612,6 +1643,10 @@ int cts_suspend_device(struct cts_device *cts_dev)
         }
     }
 
+#ifdef CFG_CTS_PALM_DETECT
+    update_palm_sensor_value(0);
+#endif
+
     cts_info("Set suspend mode:%s",
         cts_dev->rtdata.gesture_wakeup_enabled ? "gesture" : "sleep");
 
@@ -1667,6 +1702,10 @@ int cts_resume_device(struct cts_device *cts_dev)
         }
     }
 
+#ifdef CFG_CTS_PALM_DETECT
+    update_palm_sensor_value(0);
+#endif
+
     if (retries < 0) {
         const struct cts_firmware *firmware = NULL;
 
@@ -1685,6 +1724,7 @@ int cts_resume_device(struct cts_device *cts_dev)
             cts_release_firmware(firmware);
 
             if (ret) {
+                xiaomi_touch_mievent_report_int(0x365c07ea, 0, "TpFirmwareLoadFail", "chipone", ret);
                 cts_err("Update default firmware failed %d", ret);
                 goto err_set_program_mode;
             }
@@ -1720,6 +1760,14 @@ int cts_resume_device(struct cts_device *cts_dev)
 #ifdef CFG_CTS_FW_LOG_REDIRECT
     if (cts_is_fw_log_redirect(cts_dev))
         cts_enable_fw_log_redirect(cts_dev);
+#endif
+
+#ifdef CFG_CTS_PALM_DETECT
+    if (palm_sensor_write_record &&
+        (palm_sensor_write_value == 0 || palm_sensor_write_value == 1)) {
+        cts_tcs_set_pocket_palm_mode(cts_dev, palm_sensor_write_value);
+        palm_sensor_write_record = false;
+    }
 #endif
 
 #ifdef CONFIG_CTS_TP_PROXIMITY
@@ -1946,6 +1994,7 @@ int cts_enter_normal_mode(struct cts_device *cts_dev)
         }
         return 0;
     }
+    xiaomi_touch_mievent_report_int(0x365c07ea, 0, "TpFirmwareLoadFail", "chipone", ret);
     cts_set_program_addr(cts_dev);
     return ret;
 }

@@ -42,7 +42,13 @@
 #endif
 
 #include "../lct_tp/lct_tp_common.h"
-#include "../../../gpu/drm/panel/dsi_panel_c3uv_bias.h"
+#include "../lct_tp/lct_tp_gesture.h"
+#include "../xiaomi/xiaomi_touch.h"
+#include "mtk_disp_notify.h"
+#include "mi_disp_esd_check.h"
+
+extern void set_lcd_reset_gpio_keep_high_1st(bool enable);
+extern void set_prox_lcd_reset_gpio_keep_high1(bool enable);
 
 #define NVT_DEBUG 1
 
@@ -94,8 +100,8 @@ extern const uint16_t touch_key_array[TOUCH_KEY_NUM];
 #define NVT_SAVE_TEST_DATA_IN_FILE 1
 #define MT_PROTOCOL_B 1
 #define WAKEUP_GESTURE 1
-#define WAKEUP_OFF 0
-#define WAKEUP_ON 1
+#define WAKEUP_OFF 4
+#define WAKEUP_ON 5
 #if WAKEUP_GESTURE
 extern const uint16_t gesture_key_array[];
 #endif
@@ -151,7 +157,13 @@ struct nvt_ts_data {
   	bool irq_enabled;
 	bool irq_wake_enabled;
 	bool common_initialized;
+	bool gesture_initialized;
 	bool disp_notifier_registered;
+	bool gesture_wait_flag;
+	bool gesture_wait_enable;
+	bool palm_sensor_enable;
+	struct workqueue_struct *resume_wq;
+	struct work_struct resume_work;
 	bool pen_support;
 	uint8_t x_gang_num;
 	uint8_t y_gang_num;
@@ -229,5 +241,6 @@ extern void nvt_esd_check_enable(uint8_t enable);
 extern int lct_nvt_tp_selftest_callback(unsigned char cmd);
 #endif
 
+extern int32_t nvt_set_pocket_palm_switch(uint8_t pocket_palm_switch);
 extern int32_t nvt_set_proximity_power_saving_switch(uint8_t proximity_power_saving_switch);
 #endif

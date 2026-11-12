@@ -541,6 +541,7 @@ static int start_test_ft8057(void)
         ret = ft8057_short_test(tdata, &temp_result);
         if ((ret < 0) || (false == temp_result)) {
             test_result = false;
+            xiaomi_touch_mievent_report_int(0x365c0bd2, 0, "TpShortTestFail", "focal", ret < 0 ? ret : -1);
         }
     }
 
@@ -549,6 +550,7 @@ static int start_test_ft8057(void)
         ret = ft8057_open_test(tdata, &temp_result);
         if ((ret < 0) || (false == temp_result)) {
             test_result = false;
+            xiaomi_touch_mievent_report_int(0x365c0bd1, 0, "TpOpenTestFail", "focal", ret < 0 ? ret : -1);
         }
     }
 

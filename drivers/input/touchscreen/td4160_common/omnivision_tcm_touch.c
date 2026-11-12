@@ -31,6 +31,13 @@
 #include <linux/input/mt.h>
 #include <linux/interrupt.h>
 #include "omnivision_tcm_core.h"
+#include "../lct_tp/lct_tp_common.h"
+#include "../xiaomi/xiaomi_touch.h"
+
+#define WAKEUP_OFF 4
+#define WAKEUP_ON 5
+
+extern void set_lcd_reset_gpio_keep_high_3rd(bool enable);
 
 #define TYPE_B_PROTOCOL
 
@@ -54,6 +61,7 @@ enum touch_status {
 enum gesture_id {
 	NO_GESTURE_DETECTED = 0,
 	GESTURE_DOUBLE_TAP = 0X01,
+	GESTURE_PALM = 0x50,
 };
 
 enum touch_report_code {
@@ -154,7 +162,7 @@ static int ovt_check_face_state(int current_face_state);
  *
  * Report finger lift events to the input subsystem for all touch objects.
  */
-static void touch_free_objects(void)
+void touch_free_objects(void)
 {
 #ifdef TYPE_B_PROTOCOL
 	unsigned int idx;
@@ -686,6 +694,14 @@ static void touch_report(void)
 	touch_data->fd_data = FACE_STATUS_NONE;
 #endif
 
+	if (touch_data->gesture_id == GESTURE_PALM) {
+		update_palm_sensor_value(1);
+		LOGN(tcm_hcd->pdev->dev.parent, "palm detect\n");
+	} else {
+		update_palm_sensor_value(0);
+		LOGN(tcm_hcd->pdev->dev.parent, "no palm detect\n");
+	}
+
 #if WAKEUP_GESTURE
 	if (touch_data->gesture_id == GESTURE_DOUBLE_TAP &&
 			 tcm_hcd->in_suspend &&
@@ -888,6 +904,20 @@ static int touch_get_input_params(void)
 	return 0;
 }
 
+static int ovt_gesture_switch(struct input_dev *dev,
+		unsigned int type, unsigned int code, int value)
+{
+	if (type == EV_SYN && code == SYN_CONFIG) {
+		if (value == WAKEUP_OFF)
+			set_lcd_reset_gpio_keep_high_3rd(false);
+		else if (value == WAKEUP_ON)
+			set_lcd_reset_gpio_keep_high_3rd(true);
+	}
+	printk("Enter %s(%d):type=%u,code=%u,value=%d\n",
+			__func__, __LINE__, type, code, value);
+	return 0;
+}
+
 /**
  * touch_set_input_dev() - Set up input device
  *
@@ -928,6 +958,8 @@ static int touch_set_input_dev(void)
 	input_set_capability(touch_hcd->input_dev, EV_KEY, KEY_WAKEUP);
 #endif
 
+	touch_hcd->input_dev->event = ovt_gesture_switch;
+
     retval = touch_set_input_params();
     if (retval < 0) {
         LOGE(tcm_hcd->pdev->dev.parent,
@@ -955,16 +987,16 @@ static int touch_set_input_dev(void)
 #if SUPPORT_FACE_DETECT
 static int ovt_check_face_state(int current_face_state)
 {
-	//static int pre_face_state = FACE_STATUS_NONE;
+	printk("Enter %s(%d): current_face_state=%d\n",
+			__func__, __LINE__, current_face_state);
 	if ((current_face_state == FACE_FAR_FROM_1_2_3_CLOSE_WHEN_SCREEN_ON) ||
 		(current_face_state == FACE_FAR_FROM_1_2_3_CLOSE_WHEN_SCREEN_OFF)) {
-		//report far event
-		printk("tcm check face far\n");
+		printk("Enter %s(%d): tcm check face far\n", __func__, __LINE__);
+		ps_send_touch_event(1);
 	} else if ((current_face_state == FACE_CLOSE_1_SMALL_SIGNAL) ||
 				(current_face_state == FACE_CLOSE_FROM_1_2_3_CLOSE_WHEN_SCREEN_OFF)) {
-
-		//report close event
-		printk("tcm check face close\n");
+		printk("Enter %s(%d): tcm check face close\n", __func__, __LINE__);
+		ps_send_touch_event(0);
 	}
 	return 0;
 }

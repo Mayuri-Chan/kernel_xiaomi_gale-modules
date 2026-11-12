@@ -252,7 +252,7 @@ static ssize_t nvt_gesture_mode_write(struct file *file, const char __user *buff
 		if (get_user(input, buffer))
 			return -EFAULT;
 		nvt_gesture_flag = input == '5';
-		set_lcd_gesture_mode(nvt_gesture_flag);
+		set_lcd_reset_gpio_keep_high_1st(nvt_gesture_flag);
 	}
 
 	return count;
@@ -1060,12 +1060,12 @@ int32_t nvt_set_proximity_switch(uint8_t proximity_switch)
 		buf[0] = EVENT_MAP_HOST_CMD;
 		if (proximity_switch == 0) {
 
-			set_lcd_reset_gpio_keep_high_1st(false);
+			set_prox_lcd_reset_gpio_keep_high1(false);
 			proximity_event = 0;
 			buf[1] = 0x86;
 		} else if (proximity_switch == 1) {
 
-			set_lcd_reset_gpio_keep_high_1st(true);
+			set_prox_lcd_reset_gpio_keep_high1(true);
 			proximity_event = 1;
 			buf[1] = 0x85;
 		} else {

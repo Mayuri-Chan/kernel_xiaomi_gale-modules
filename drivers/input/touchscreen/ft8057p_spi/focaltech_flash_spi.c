@@ -1118,11 +1118,9 @@ static void fts_fwres_work(struct work_struct *work)
     fts_enter_normal_fw();
 }
 
-/*For LCD driver call*/
-void fts_fwresume_work(void)
+static void fts_fwresume_callback(void)
 {
-    FTS_INFO("call.");
-    queue_work(fts_data->ts_workqueue, &fts_data->fwres_work);
+    fts_enter_normal_fw();
 }
 #else
 int fts_enter_normal_fw(void)
@@ -1383,9 +1381,10 @@ int fts_fwupg_init(struct fts_ts_data *ts_data)
 
     fts_esdcheck_switch(ts_data, DISABLE);
     fwupgrade->ts_data = ts_data;
-    #if FTS_THREE_IN_ONE
+#if FTS_THREE_IN_ONE
     INIT_WORK(&ts_data->fwres_work, fts_fwres_work);
-	#endif
+    fts_fwresume_work = fts_fwresume_callback;
+#endif
     INIT_WORK(&ts_data->fwupg_work, fts_fwupg_work);
     queue_work(ts_data->ts_workqueue, &ts_data->fwupg_work);
 
@@ -1397,7 +1396,8 @@ int fts_fwupg_exit(struct fts_ts_data *ts_data)
     FTS_FUNC_ENTER();
     cancel_work_sync(&ts_data->fwupg_work);
     #if FTS_THREE_IN_ONE
-     cancel_work_sync(&ts_data->fwres_work);
+    fts_fwresume_work = NULL;
+    cancel_work_sync(&ts_data->fwres_work);
 	#endif
     if (fwupgrade) {
         if (fwupgrade->fw_from_request) {

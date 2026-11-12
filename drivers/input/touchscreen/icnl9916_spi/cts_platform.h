@@ -26,10 +26,10 @@
 #define PDE_DATA(inode) pde_data(inode)
 #endif
 #ifndef WAKEUP_OFF
-#define WAKEUP_OFF 0
+#define WAKEUP_OFF 4
 #endif
 #ifndef WAKEUP_ON
-#define WAKEUP_ON 1
+#define WAKEUP_ON 5
 #endif
 #include <linux/delay.h>
 #include <linux/version.h>

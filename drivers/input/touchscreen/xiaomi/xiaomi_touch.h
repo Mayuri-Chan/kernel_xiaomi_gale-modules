@@ -95,6 +95,8 @@ extern struct device *get_xiaomi_touch_dev(void);
 extern int update_palm_sensor_value(int value);
 
 int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data);
+void xiaomi_touch_mievent_report_int(int id, int panel_id, const char *fault_name, const char *vendor_name, long error_code);
+void xiaomi_touch_mievent_report_str(int id, int panel_id, const char *fault_name, const char *vendor_name);
 
 #endif
 
