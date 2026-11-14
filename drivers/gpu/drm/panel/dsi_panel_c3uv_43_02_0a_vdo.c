@@ -375,8 +375,7 @@ static const struct lcm_desc *lcm_select_panel(struct device *dev)
 {
 	const struct lcm_desc *desc = of_device_get_match_data(dev);
 	struct device_node *chosen;
-	const char *args, *name;
-	size_t len;
+	const char *args;
 
 	if (desc)
 		return desc;
@@ -388,23 +387,9 @@ static const struct lcm_desc *lcm_select_panel(struct device *dev)
 		return ERR_PTR(-ENODEV);
 	}
 
-	name = strstr(args, "panel_name=");
-	if (name && (name == args || isspace(name[-1]))) {
-		name += strlen("panel_name=");
-	} else {
-		name = strstr(args, "lcm_name=");
-		if (name && (name == args || isspace(name[-1])))
-			name += strlen("lcm_name=");
-		else
-			name = NULL;
-	}
-	if (name) {
-		len = strcspn(name, " \t");
-		if ((strlen(lcm_desc.name) == len &&
-		     !strncmp(name, lcm_desc.name, len)) ||
-		    (strlen("dsi_panel_c3u_43_02_0a_dsc_vdo") == len &&
-		     !strncmp(name, "dsi_panel_c3u_43_02_0a_dsc_vdo", len)))
-			desc = &lcm_desc;
+	if (strstr(args, "43_02_0a") || strstr(args, lcm_desc.name)) {
+		pr_info("%s: matched panel [43_02_0a] in bootargs\n", __func__);
+		desc = &lcm_desc;
 	}
 
 	of_node_put(chosen);
