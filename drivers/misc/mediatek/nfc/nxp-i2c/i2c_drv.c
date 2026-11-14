@@ -40,6 +40,7 @@
 #include <linux/delay.h>
 #include <linux/uaccess.h>
 #include <linux/gpio.h>
+#include <linux/of.h>
 // #include <linux/pm_wakeup.h>
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
@@ -514,6 +515,25 @@ int nfc_i2c_dev_resume(struct device *device)
 }
 EXPORT_SYMBOL(nfc_i2c_dev_resume);
 
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+static int nfc_i2c_direct_probe(struct i2c_client *client)
+#else
+static int nfc_i2c_direct_probe(struct i2c_client *client,
+				const struct i2c_device_id *id)
+#endif
+{
+	if (IS_ENABLED(CONFIG_MACH_GALE) &&
+	    IS_ENABLED(CONFIG_TMS_GUIDE_DEVICE) &&
+	    of_device_is_compatible(client->dev.of_node, "qcom,nq-nci"))
+		return -ENODEV;
+
+#if (KERNEL_VERSION(6, 3, 0) <= LINUX_VERSION_CODE)
+	return nfc_i2c_dev_probe(client);
+#else
+	return nfc_i2c_dev_probe(client, id);
+#endif
+}
+
 static const struct i2c_device_id nfc_i2c_dev_id[] = { { NFC_I2C_DEV_ID, 0 },
 						       {} };
 
@@ -529,7 +549,7 @@ static const struct dev_pm_ops nfc_i2c_dev_pm_ops = { SET_SYSTEM_SLEEP_PM_OPS(
 
 static struct i2c_driver nfc_i2c_dev_driver = {
 	.id_table = nfc_i2c_dev_id,
-	.probe = nfc_i2c_dev_probe,
+	.probe = nfc_i2c_direct_probe,
 	.remove = nfc_i2c_dev_remove,
 	.driver = {
 		.name = NFC_I2C_DRV_STR,

@@ -109,6 +109,10 @@
 		qcom,nq-ven = <&pio 159 0>;
 		qcom,nq-firm = <&pio 17 0>;
 		qcom,nq-clkreq = <&pio 11 0>;
+		/* GPIO names consumed by the NXP driver after guide detection. */
+		nxp,sn-irq = <&pio 6 0>;
+		nxp,sn-ven-rstn = <&pio 159 0>;
+		nxp,sn-dwl-req = <&pio 17 0>;
 		interrupt-names = "nfc_irq";
 		pinctrl-names = "default", "nfc_active", "nfc_suspend";
 		pinctrl-0 = <&nfc_default>;

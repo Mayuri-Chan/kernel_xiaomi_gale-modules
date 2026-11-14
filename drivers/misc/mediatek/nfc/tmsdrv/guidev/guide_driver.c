@@ -93,9 +93,9 @@ static int guidev_probe_driver(struct i2c_client *client, chip_t chip_type)
     case NXP_SN110X:
         TMS_INFO("NXP SN110X driver start probe\n");
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,3,0)        
-        nfc_i2c_dev_probe(client, id);
+        ret = nfc_i2c_dev_probe(client, id);
 #else
-        nfc_i2c_dev_probe(client);
+        ret = nfc_i2c_dev_probe(client);
 #endif        
         TMS_INFO("NXP SN110X ese driver start probe\n");
 //        p61_dev_init();
