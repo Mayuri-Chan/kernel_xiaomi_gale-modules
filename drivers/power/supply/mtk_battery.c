@@ -12,6 +12,7 @@
 #include <linux/irqdesc.h>	/*irq_to_desc*/
 #include <linux/kernel.h>
 #include <linux/kthread.h>	/* For Kthread_run */
+#include <linux/limits.h>
 #include <linux/math64.h>
 #include <linux/module.h>	/* For MODULE_ marcros  */
 #include <linux/netlink.h>	/* netlink */
@@ -1708,6 +1709,9 @@ void fg_custom_init_from_dts(struct platform_device *dev,
 	fg_cust_data = &gm->fg_cust_data;
 	fg_table_cust_data = &gm->fg_table_cust_data;
 
+	if (!of_property_read_u32(np, "charge-full-design-microamp-hours", &val) &&
+	    val > 0 && val <= INT_MAX)
+		gm->design_capacity_uah = val;
 
 	if (gm->ptim_lk_v == 0) {
 		fg_read_dts_val(gm, np, "fg_swocv_v", &(lk_v), 1);

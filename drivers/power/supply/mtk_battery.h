@@ -1093,6 +1093,7 @@ struct mtk_battery {
 	struct mutex fg_update_lock;
 	int id;
 	int type;
+	int design_capacity_uah;
 
 	struct property_control prop_control;
 

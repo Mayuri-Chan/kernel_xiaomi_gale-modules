@@ -1065,7 +1065,10 @@ static int bm_update_psy_property(struct mtk_battery *gm, enum bm_psy_prop prop)
 		ret_val = battery_get_int_property(gm, BAT_PROP_TEMPERATURE);
 		break;
 	case QMAX_DESIGN:
-		ret_val = gm->fg_table_cust_data.fg_profile[0].q_max * 10;
+		if (gm->design_capacity_uah)
+			ret_val = gm->design_capacity_uah / 100;
+		else
+			ret_val = gm->fg_table_cust_data.fg_profile[0].q_max * 10;
 		break;
 	case QMAX:
 		ret_val = gm->daemon_data.qmxa_t_0ma;

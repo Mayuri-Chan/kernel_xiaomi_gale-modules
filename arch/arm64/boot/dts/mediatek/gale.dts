@@ -407,6 +407,7 @@
 
 &mtk_gauge {
 	charger = <&sc8989x_chg>;
+	charge-full-design-microamp-hours = <5000000>;
 	active-table = <5>;
 	embedded-sel = <1>;
 	temperature-t4 = <(-10)>;
