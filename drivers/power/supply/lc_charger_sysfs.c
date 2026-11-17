@@ -78,9 +78,10 @@ static int lc_usb_get_property(struct power_supply *psy,
 		val->intval = lc_get_property(lc->primary, POWER_SUPPLY_PROP_ONLINE);
 		return 0;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		if (lc->manager && lc->manager->chg1_dev)
-			charger_dev_get_vbus(lc->manager->chg1_dev, &vbus);
-		val->intval = vbus * 1000;
+		if (!lc->manager || !lc->manager->chg1_dev ||
+		    charger_dev_get_vbus(lc->manager->chg1_dev, &vbus))
+			return -ENODATA;
+		val->intval = vbus;
 		return 0;
 	default:
 		return -EINVAL;
