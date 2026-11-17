@@ -4187,7 +4187,12 @@ static int mt6358_gauge_probe(struct platform_device *pdev)
 			&gauge->psy_cfg);
 	mt6358_sysfs_create_group(gauge);
 	initial_set(gauge, 0, 0);
-	battery_init(pdev);
+	ret = battery_init(pdev);
+	if (ret) {
+		sysfs_remove_group(&gauge->psy->dev.kobj, &mt6358_sysfs_attr_group);
+		power_supply_unregister(gauge->psy);
+		return ret;
+	}
 	adc_cali_cdev_init(gauge->gm, pdev);
 
 	return 0;

@@ -641,6 +641,46 @@ int adc_battemp(struct mtk_battery *gm, int res)
 	return tbatt_value;
 }
 
+static int fg_read_temperature_table(struct platform_device *pdev,
+				     struct mtk_battery *gm)
+{
+	struct device_node *np = pdev->dev.of_node;
+	struct fg_temp *table;
+	u32 resistance[21];
+	int i;
+
+	if (!of_find_property(np, "battery-temperature-resistance-table", NULL))
+		return 0;
+
+	if (of_property_count_u32_elems(np, "battery-temperature-resistance-table") !=
+	    ARRAY_SIZE(resistance) ||
+	    of_property_read_u32_array(np, "battery-temperature-resistance-table",
+				       resistance, ARRAY_SIZE(resistance))) {
+		dev_err(&pdev->dev, "invalid battery temperature table\n");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(resistance); i++) {
+		if (!resistance[i] || resistance[i] > INT_MAX / 100 ||
+		    (i && resistance[i] >= resistance[i - 1])) {
+			dev_err(&pdev->dev, "invalid battery temperature resistance\n");
+			return -EINVAL;
+		}
+	}
+
+	table = devm_kcalloc(&pdev->dev, ARRAY_SIZE(resistance),
+			     sizeof(*table), GFP_KERNEL);
+	if (!table)
+		return -ENOMEM;
+
+	for (i = 0; i < ARRAY_SIZE(resistance); i++) {
+		table[i].BatteryTemp = -40 + i * 5;
+		table[i].TemperatureR = resistance[i];
+	}
+	gm->tmp_table = table;
+	return 0;
+}
+
 int volttotemp(struct mtk_battery *gm, int dwVolt, int volt_cali)
 {
 	long long tres_temp;
@@ -3315,6 +3355,11 @@ int battery_init(struct platform_device *pdev)
 	fg_check_bat_type(pdev, gm);
 	fg_custom_init_from_header(gm);
 	fg_custom_init_from_dts(pdev, gm);
+	ret = fg_read_temperature_table(pdev, gm);
+	if (ret) {
+		gmb = NULL;
+		return ret;
+	}
 	mtk_irq_thread_init(gm);
 	gauge_coulomb_service_init(gm);
 	gm->coulomb_plus.callback = fg_coulomb_int_h_handler;

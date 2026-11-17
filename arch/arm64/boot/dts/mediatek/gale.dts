@@ -407,6 +407,13 @@
 
 &mtk_gauge {
 	charger = <&sc8989x_chg>;
+	rbat-pull-up-r = <100000>;
+	rbat-pull-up-volt = <2800>;
+	battery-temperature-resistance-table = <
+		4251000 3005000 2149000 1554000 1135000
+		837800 624100 469100 355600 271800 209400
+		162500 127000 100000 79230 63180 50680
+		40900 33190 27090 22220>;
 	charge-full-design-microamp-hours = <5000000>;
 	active-table = <5>;
 	embedded-sel = <1>;
