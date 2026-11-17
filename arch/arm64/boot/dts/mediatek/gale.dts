@@ -186,7 +186,7 @@
 	};
 
 	rt1711_typec: rt1711h_type_c_port0 {
-		compatible = "medaitek, usb_type_c";
+		compatible = "hynetek,husb311";
 		reg = <0x4e>;
 		rt-tcpc,name = "type_c_port0";
 		rt-tcpc,role_def = <5>;

@@ -21,6 +21,10 @@
 #endif /* CONFIG_RT_REGMAP */
 
 #define RT1711H_DRV_VERSION	"2.0.9_MTK"
+#define HUSB311_VID		0x2e99
+#define HUSB311_PID		0x0311
+#define HUSB311_REG_VERSION	0xcf
+#define HUSB311_REG_VCONN_CLIMITEN 0x95
 
 struct rt1711_chip {
 	struct i2c_client *client;
@@ -34,6 +38,8 @@ struct rt1711_chip {
 	int irq_gpio;
 	int irq;
 	int chip_id;
+	bool husb311;
+	bool husb311_b;
 
 	bool vconn_en;
 	bool lpm_en;
@@ -68,6 +74,7 @@ RT_REG_DECL(RT1711H_REG_CLK_CTRL2, 2, RT_NORMAL_WR_ONCE, {});
 RT_REG_DECL(RT1711H_REG_PRL_FSM_RESET, 1, RT_VOLATILE, {});
 RT_REG_DECL(RT1711H_REG_BMC_CTRL, 1, RT_VOLATILE, {});
 RT_REG_DECL(RT1711H_REG_BMCIO_RXDZSEL, 1, RT_NORMAL_WR_ONCE, {});
+RT_REG_DECL(HUSB311_REG_VCONN_CLIMITEN, 1, RT_NORMAL_WR_ONCE, {});
 RT_REG_DECL(RT1711H_REG_RT_STATUS, 1, RT_VOLATILE, {});
 RT_REG_DECL(RT1711H_REG_RT_INT, 1, RT_VOLATILE, {});
 RT_REG_DECL(RT1711H_REG_RT_MASK, 1, RT_NORMAL_WR_ONCE, {});
@@ -109,6 +116,7 @@ static const rt_register_map_t rt1711_chip_regmap[] = {
 	RT_REG(RT1711H_REG_PRL_FSM_RESET),
 	RT_REG(RT1711H_REG_BMC_CTRL),
 	RT_REG(RT1711H_REG_BMCIO_RXDZSEL),
+	RT_REG(HUSB311_REG_VCONN_CLIMITEN),
 	RT_REG(RT1711H_REG_RT_STATUS),
 	RT_REG(RT1711H_REG_RT_INT),
 	RT_REG(RT1711H_REG_RT_MASK),
@@ -650,9 +658,9 @@ static int rt1711_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
 	}
 
 #if CONFIG_TCPC_I2CRST_EN
-	rt1711_i2c_write8(tcpc,
-		RT1711H_REG_I2CRST_CTRL,
-		RT1711H_REG_I2CRST_SET(true, 0x0f));
+	if (!chip->husb311_b)
+		rt1711_i2c_write8(tcpc, RT1711H_REG_I2CRST_CTRL,
+				  RT1711H_REG_I2CRST_SET(true, 0x0f));
 #endif	/* CONFIG_TCPC_I2CRST_EN */
 
 	/* UFP Both RD setting */
@@ -672,8 +680,10 @@ static int rt1711_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
 	 * DRP Duty Ctrl : dcSRC / 1024
 	 */
 
-	rt1711_i2c_write8(tcpc, RT1711H_REG_TTCPC_FILTER, 15);
-	rt1711_i2c_write8(tcpc, RT1711H_REG_DRP_TOGGLE_CYCLE, 0);
+	rt1711_i2c_write8(tcpc, RT1711H_REG_TTCPC_FILTER, chip->husb311 ? 10 : 15);
+	rt1711_i2c_write8(tcpc, RT1711H_REG_DRP_TOGGLE_CYCLE, chip->husb311 ? 4 : 0);
+	if (chip->husb311)
+		rt1711_i2c_write8(tcpc, HUSB311_REG_VCONN_CLIMITEN, 1);
 	rt1711_i2c_write16(tcpc,
 		RT1711H_REG_DRP_DUTY_CTRL, TCPC_NORMAL_RP_DUTY);
 
@@ -911,6 +921,8 @@ static int rt1711_set_vconn(struct tcpc_device *tcpc, int enable)
 	int rv;
 	struct rt1711_chip *chip = tcpc_get_dev_data(tcpc);
 
+	if (chip->husb311_b)
+		enable = 0;
 	chip->vconn_en = !!enable;
 	rv = rt1711h_idle_ctrl(tcpc);
 	if (rv < 0)
@@ -1218,7 +1230,7 @@ static int rt1711_tcpcdev_init(struct rt1711_chip *chip, struct device *dev)
 	if (chip->chip_id > RT1715_DID_D)
 		tcpc->tcpc_flags |= TCPC_FLAGS_RETRY_CRC_DISCARD;
 #if CONFIG_USB_PD_REV30
-	if (chip->chip_id >= RT1715_DID_D)
+	if (chip->husb311 || chip->chip_id >= RT1715_DID_D)
 		tcpc->tcpc_flags |= TCPC_FLAGS_PD_REV30;
 
 	if (tcpc->tcpc_flags & TCPC_FLAGS_PD_REV30)
@@ -1237,6 +1249,7 @@ static int rt1711_tcpcdev_init(struct rt1711_chip *chip, struct device *dev)
 static inline int rt1711h_check_revision(struct i2c_client *client)
 {
 	u16 data = 0;
+	u16 vid;
 	int ret = 0;
 
 	ret = i2c_smbus_read_i2c_block_data(client, TCPC_V10_REG_VID, 2,
@@ -1246,7 +1259,8 @@ static inline int rt1711h_check_revision(struct i2c_client *client)
 		return ret;
 	}
 	data = le16_to_cpu(data);
-	if (data != RICHTEK_1711_VID) {
+	vid = data;
+	if (vid != RICHTEK_1711_VID && vid != HUSB311_VID) {
 		dev_info(&client->dev, "%s failed, VID=0x%04x\n",
 				       __func__, data);
 		return -ENODEV;
@@ -1259,7 +1273,8 @@ static inline int rt1711h_check_revision(struct i2c_client *client)
 		return ret;
 	}
 	data = le16_to_cpu(data);
-	if (data != RICHTEK_1711_PID) {
+	if (!((vid == RICHTEK_1711_VID && data == RICHTEK_1711_PID) ||
+	      (vid == HUSB311_VID && data == HUSB311_PID))) {
 		dev_info(&client->dev, "%s failed, PID=0x%04x\n",
 				       __func__, data);
 		return -ENODEV;
@@ -1276,7 +1291,7 @@ static inline int rt1711h_check_revision(struct i2c_client *client)
 		dev_notice(&client->dev, "read Device ID fail(%d)\n", ret);
 		return ret;
 	}
-	return le16_to_cpu(data);
+	return vid == HUSB311_VID ? HUSB311_PID : le16_to_cpu(data);
 }
 
 static int rt1711_probe(struct i2c_client *client)
@@ -1312,6 +1327,13 @@ static int rt1711_probe(struct i2c_client *client)
 	chip->client = client;
 	i2c_set_clientdata(client, chip);
 	chip->chip_id = chip_id;
+	chip->husb311 = chip_id == HUSB311_PID;
+	if (chip->husb311) {
+		ret = i2c_smbus_read_byte_data(client, HUSB311_REG_VERSION);
+		if (ret < 0)
+			return ret;
+		chip->husb311_b = !!(ret & BIT(7));
+	}
 	pr_info("rt1711h_chipID = 0x%0x\n", chip_id);
 	chip->vconn_en = false;
 	chip->lpm_en = false;
@@ -1454,6 +1476,7 @@ static const struct dev_pm_ops rt1711_pm_ops = {
 };
 
 static const struct of_device_id rt1711_of_match_table[] = {
+	{.compatible = "hynetek,husb311",},
 	{.compatible = "richtek,rt1711h",},
 	{.compatible = "richtek,rt1715",},
 	{.compatible = "richtek,rt1716",},
