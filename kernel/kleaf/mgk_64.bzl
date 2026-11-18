@@ -1091,6 +1091,7 @@ mgk_64_platform_device_user_modules = {
 def get_overlay_modules_list():
     if "gale" in DEFCONFIG_OVERLAYS:
         mgk_64_device_modules.extend([
+            "block/ssg.ko",
             "drivers/gpu/drm/panel/dsi_panel_c3uv_bias.ko",
             "drivers/gpu/drm/panel/dsi_panel_c3uv_43_02_0a_vdo.ko",
             "drivers/gpu/drm/panel/dsi_panel_c3uv_35_03_0b_vdo.ko",

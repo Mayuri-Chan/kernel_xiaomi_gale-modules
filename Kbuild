@@ -112,5 +112,6 @@ obj-y += drivers/pci/controller/
 
 obj-y += drivers/video/backlight/
 
+obj-y += block/
 
 endif
