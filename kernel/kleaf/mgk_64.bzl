@@ -1106,6 +1106,7 @@ def get_overlay_modules_list():
             "drivers/power/supply/lc_charger_sysfs.ko",
             "drivers/misc/mediatek/imgsensor/src/isp4_t/gc_gc6133c_i.ko",
             "drivers/misc/mediatek/imgsensor/src/isp4_t/sc_sc080cs_ii.ko",
+            "drivers/misc/ntsync.ko",
             "drivers/input/fingerprint/goodix/gf_fingerprint.ko",
             "drivers/input/fingerprint/silead/sil_fingerprint.ko",
             "drivers/input/fingerprint/fpc/mtk_spi.ko",

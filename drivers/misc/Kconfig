@@ -1,3 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
-source "drivers/misc/mediatek/Kconfig"
+config NTSYNC
+	tristate "NT synchronization primitive emulation"
+	default	n
+	help
+	  This module provides kernel support for emulation of Windows NT
+	  synchronization primitives. It is not a hardware driver.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ntsync.
+
+	  If unsure, say N.
+
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/Kconfig"

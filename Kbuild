@@ -100,7 +100,7 @@ obj-y += drivers/net/phy/
 
 obj-y += drivers/devfreq/
 
-obj-y += drivers/misc/mediatek/
+obj-y += drivers/misc/
 
 obj-y += sound/soc/codecs/
 
