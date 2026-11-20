@@ -28,6 +28,15 @@
 #include "charger_class.h"
 #include "../../misc/mediatek/usb/usb20/mtk_musb.h"
 
+extern int charger_manager_pd_is_online(void) __attribute__((weak));
+
+static inline bool sc8989x_pd_is_online(void)
+{
+	if (charger_manager_pd_is_online)
+		return charger_manager_pd_is_online() != 0;
+	return false;
+}
+
 enum sc8989x_part_id {
 	BQ25890 = 0x03,
 	SC8989X = 0x04,
@@ -819,7 +828,7 @@ static int sc8989x_set_chg_enable(struct sc8989x_chip *sc, bool enable)
 				dev_info(sc->dev,
 					 "vbus absent, enable charge skip");
 			} else {
-				if (!sc->bc12_done_flag)
+				if (!sc->bc12_done_flag && !sc8989x_pd_is_online())
 					dev_info(
 						sc->dev,
 						"sc bc1.2 ongoing, enable charge skip");
@@ -1807,7 +1816,7 @@ static int sc8989x_get_charger_type(struct sc8989x_chip *sc)
 		sc->psy_usb_type = POWER_SUPPLY_USB_TYPE_DCP;
 		sc->chg_type = NONSTANDARD_CHARGER;
 
-		{
+		if (!sc8989x_pd_is_online()) {
 			if (sc->force_detect_count < 16) {
 				schedule_delayed_work(&sc->force_detect_dwork,
 						      msecs_to_jiffies(500));

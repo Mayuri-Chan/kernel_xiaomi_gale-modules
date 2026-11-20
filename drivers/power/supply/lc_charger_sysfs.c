@@ -4,9 +4,17 @@
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/slab.h>
-#include "mtk_charger.h"
 #include "tcpm.h"
 #include "mtk_disp_notify.h"
+
+extern int charger_manager_pd_is_online(void) __attribute__((weak));
+
+static inline bool lc_pd_is_online(void)
+{
+	if (charger_manager_pd_is_online)
+		return charger_manager_pd_is_online() != 0;
+	return false;
+}
 
 struct lc_charger {
 	struct mtk_charger *manager;
@@ -46,7 +54,7 @@ static int lc_charge_type(void)
 	int type = lc_get_property(lc->primary, POWER_SUPPLY_PROP_TYPE);
 	int usb_type = lc_get_property(lc->primary, POWER_SUPPLY_PROP_USB_TYPE);
 
-	if (charger_manager_pd_is_online())
+	if (lc_pd_is_online())
 		return 6;
 	switch (type) {
 	case POWER_SUPPLY_TYPE_USB:

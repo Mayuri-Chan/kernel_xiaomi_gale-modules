@@ -1083,7 +1083,7 @@ static int bs_psy_get_property(struct power_supply *psy,
 	enum power_supply_property psp,
 	union power_supply_propval *val)
 {
-	int ret = 0, qmax = 0, cycle = 0;
+	int ret = 0, qmax = 0;
 	int curr_now = 0;
 	int curr_avg = 0;
 	int remain_ui = 0, remain_mah = 0;
@@ -1113,21 +1113,9 @@ static int bs_psy_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
 		val->intval = bs_data->bat_technology;
 		break;
-	case POWER_SUPPLY_PROP_CYCLE_COUNT: //sum(cycle * qmax) / sum(qmax)
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		if (bm->gm1 != NULL)
-			if(!bm->gm1->bat_plug_out) {
-				cycle += (bm->gm1->bat_cycle + 1) *
-					bm_update_psy_property(bm->gm1, QMAX_DESIGN);
-				qmax += bm_update_psy_property(bm->gm1, QMAX_DESIGN);
-			}
-		if (bm->gm2 != NULL)
-			if(!bm->gm2->bat_plug_out) {
-				cycle += (bm->gm2->bat_cycle + 1) *
-					bm_update_psy_property(bm->gm2, QMAX_DESIGN);
-				qmax += bm_update_psy_property(bm->gm2, QMAX_DESIGN);
-			}
-		if (qmax != 0)
-			val->intval = cycle / qmax;
+			val->intval = bm->gm1->bat_cycle;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY: //sum(uisoc)
 		/* 1 = META_BOOT, 4 = FACTORY_BOOT 5=ADVMETA_BOOT */
@@ -1317,6 +1305,12 @@ static int bs_psy_set_property(struct power_supply *psy,
 
 	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
 	switch (psp) {
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		if (bm->gm1) {
+			bm->gm1->bat_cycle = val->intval;
+			pr_info("%s set bat_cycle: %d\n", __func__, val->intval);
+		}
+		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (val->intval > 0)
 			bm_send_cmd(bm, MANAGER_DYNAMIC_CV, val->intval);
@@ -1324,12 +1318,24 @@ static int bs_psy_set_property(struct power_supply *psy,
 	default:
 		ret = -EINVAL;
 		break;
-		}
+	}
 
-	pr_err("%s psp:%d ret:%d val:%d",
+	pr_debug("%s psp:%d ret:%d val:%d\n",
 		__func__, psp, ret, val->intval);
 
 	return ret;
+}
+
+static int bs_psy_property_is_writeable(struct power_supply *psy,
+					enum power_supply_property psp)
+{
+	switch (psp) {
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+		return 1;
+	default:
+		return 0;
+	}
 }
 
 static void mtk_battery_external_power_changed(struct power_supply *psy)
@@ -1463,6 +1469,7 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->psd.num_properties = ARRAY_SIZE(battery_props);
 	bs_data->psd.get_property = bs_psy_get_property;
 	bs_data->psd.set_property = bs_psy_set_property;
+	bs_data->psd.property_is_writeable = bs_psy_property_is_writeable;
 	bs_data->psd.external_power_changed =
 		mtk_battery_external_power_changed;
 	bs_data->psy_cfg.drv_data = bm;
