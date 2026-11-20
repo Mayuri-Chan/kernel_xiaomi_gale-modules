@@ -25,6 +25,8 @@
 #define HUSB311_PID		0x0311
 #define HUSB311_REG_VERSION	0xcf
 #define HUSB311_REG_VCONN_CLIMITEN 0x95
+#define SC2150A_VID		0x311c
+#define SC2150A_PID		0x2150
 
 struct rt1711_chip {
 	struct i2c_client *client;
@@ -671,6 +673,10 @@ static int rt1711_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
 	if (chip->chip_id == RT1711H_DID_A) {
 		rt1711_i2c_write8(tcpc, TCPC_V10_REG_FAULT_CTRL,
 			TCPC_V10_REG_FAULT_CTRL_DIS_VCONN_OV);
+	} else if (chip->chip_id == 0) {
+		/* SC2150A needs VBUS detect explicitly enabled after reset */
+		rt1711_i2c_write8(tcpc, TCPC_V10_REG_COMMAND,
+			TCPM_CMD_ENABLE_VBUS_DETECT);
 	}
 
 	/*
@@ -965,9 +971,7 @@ static int rt1711_set_low_power_mode(
 
 static int rt1711_tcpc_deinit(struct tcpc_device *tcpc)
 {
-#if IS_ENABLED(CONFIG_RT_REGMAP)
 	struct rt1711_chip *chip = tcpc_get_dev_data(tcpc);
-#endif /* CONFIG_RT_REGMAP */
 	int cc1 = TYPEC_CC_VOLT_OPEN, cc2 = TYPEC_CC_VOLT_OPEN;
 
 	rt1711_get_cc(tcpc, &cc1, &cc2);
@@ -976,6 +980,8 @@ static int rt1711_tcpc_deinit(struct tcpc_device *tcpc)
 		rt1711_set_cc(tcpc, TYPEC_CC_OPEN);
 		usleep_range(20000, 30000);
 	}
+	if (chip->chip_id == 0)
+		mdelay(100);
 	rt1711_i2c_write8(tcpc, RT1711H_REG_SWRESET, 1);
 	chip->is_deinit = true;
 #if IS_ENABLED(CONFIG_RT_REGMAP)
@@ -1064,7 +1070,8 @@ static int rt1711_retransmit(struct tcpc_device *tcpc)
 struct tcpc_transmit_packet {
 	uint8_t cnt;
 	uint16_t msg_header;
-	uint8_t data[sizeof(uint32_t)*7];
+	/* Extra 4 trailing zero bytes required by SC2150A TX_BYTE_CNT quirk */
+	uint8_t data[sizeof(uint32_t)*7 + 4];
 };
 #pragma pack(pop)
 
@@ -1074,7 +1081,7 @@ static int rt1711_transmit(struct tcpc_device *tcpc,
 	struct rt1711_chip *chip = tcpc_get_dev_data(tcpc);
 	int rv;
 	int data_cnt;
-	struct tcpc_transmit_packet packet;
+	struct tcpc_transmit_packet packet = {0};
 
 	if (type < TCPC_TX_HARD_RESET) {
 		data_cnt = sizeof(uint32_t) * PD_HEADER_CNT(header);
@@ -1084,6 +1091,8 @@ static int rt1711_transmit(struct tcpc_device *tcpc,
 
 		if (data_cnt > 0)
 			memcpy(packet.data, (uint8_t *) data, data_cnt);
+		if (chip->chip_id == 0)
+			packet.cnt += 4;
 
 		rv = rt1711_block_write(chip->client,
 				TCPC_V10_REG_TX_BYTE_CNT,
@@ -1230,7 +1239,7 @@ static int rt1711_tcpcdev_init(struct rt1711_chip *chip, struct device *dev)
 	if (chip->chip_id > RT1715_DID_D)
 		tcpc->tcpc_flags |= TCPC_FLAGS_RETRY_CRC_DISCARD;
 #if CONFIG_USB_PD_REV30
-	if (chip->husb311 || chip->chip_id >= RT1715_DID_D)
+	if (chip->husb311 || chip->chip_id == 0 || chip->chip_id >= RT1715_DID_D)
 		tcpc->tcpc_flags |= TCPC_FLAGS_PD_REV30;
 
 	if (tcpc->tcpc_flags & TCPC_FLAGS_PD_REV30)
@@ -1260,7 +1269,8 @@ static inline int rt1711h_check_revision(struct i2c_client *client)
 	}
 	data = le16_to_cpu(data);
 	vid = data;
-	if (vid != RICHTEK_1711_VID && vid != HUSB311_VID) {
+	if (vid != RICHTEK_1711_VID && vid != HUSB311_VID &&
+	    vid != SC2150A_VID) {
 		dev_info(&client->dev, "%s failed, VID=0x%04x\n",
 				       __func__, data);
 		return -ENODEV;
@@ -1274,7 +1284,8 @@ static inline int rt1711h_check_revision(struct i2c_client *client)
 	}
 	data = le16_to_cpu(data);
 	if (!((vid == RICHTEK_1711_VID && data == RICHTEK_1711_PID) ||
-	      (vid == HUSB311_VID && data == HUSB311_PID))) {
+	      (vid == HUSB311_VID && data == HUSB311_PID) ||
+	      (vid == SC2150A_VID && data == SC2150A_PID))) {
 		dev_info(&client->dev, "%s failed, PID=0x%04x\n",
 				       __func__, data);
 		return -ENODEV;
@@ -1291,7 +1302,11 @@ static inline int rt1711h_check_revision(struct i2c_client *client)
 		dev_notice(&client->dev, "read Device ID fail(%d)\n", ret);
 		return ret;
 	}
-	return vid == HUSB311_VID ? HUSB311_PID : le16_to_cpu(data);
+	if (vid == HUSB311_VID)
+		return HUSB311_PID;
+	if (vid == SC2150A_VID)
+		return 0;
+	return le16_to_cpu(data);
 }
 
 static int rt1711_probe(struct i2c_client *client)

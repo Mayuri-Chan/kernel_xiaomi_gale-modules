@@ -608,6 +608,11 @@ __maybe_unused static int sc8989x_get_adc_ibus(struct sc8989x_chip *sc,
 	int ret;
 	int reg = 0;
 
+	if (sc->part_no != SC8989X) {
+		*val = 0;
+		return 0;
+	}
+
 	ret = sc8989x_field_read(sc, ADC_IBUS, &reg);
 	if (ret < 0) {
 		sc8989x_set_key(sc);
