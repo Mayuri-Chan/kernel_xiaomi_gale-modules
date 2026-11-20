@@ -47,39 +47,38 @@ static void mtk_usb_extcon_update_role(struct work_struct *work)
 
 	dev_info(extcon->dev, "cur_dr(%d) new_dr(%d)\n", cur_dr, new_dr);
 
+	/* none -> device */
+	if (cur_dr == USB_ROLE_NONE && new_dr == USB_ROLE_DEVICE) {
+		extcon_set_state_sync(extcon->edev, EXTCON_USB, true);
+	/* none -> host */
+	} else if (cur_dr == USB_ROLE_NONE && new_dr == USB_ROLE_HOST) {
+		extcon_set_state_sync(extcon->edev,
+						EXTCON_USB_HOST, true);
+	/* device -> none */
+	} else if (cur_dr == USB_ROLE_DEVICE &&
+			new_dr == USB_ROLE_NONE) {
+		extcon_set_state_sync(extcon->edev, EXTCON_USB, false);
+	/* host -> none */
+	} else if (cur_dr == USB_ROLE_HOST && new_dr == USB_ROLE_NONE) {
+		extcon_set_state_sync(extcon->edev,
+						EXTCON_USB_HOST, false);
+	/* device -> host */
+	} else if (cur_dr == USB_ROLE_DEVICE &&
+			new_dr == USB_ROLE_HOST) {
+		extcon_set_state_sync(extcon->edev, EXTCON_USB, false);
+		extcon_set_state_sync(extcon->edev,
+						EXTCON_USB_HOST, true);
+	/* host -> device */
+	} else if (cur_dr == USB_ROLE_HOST &&
+			new_dr == USB_ROLE_DEVICE) {
+		extcon_set_state_sync(extcon->edev,
+						EXTCON_USB_HOST, false);
+		extcon_set_state_sync(extcon->edev, EXTCON_USB, true);
+	}
+
 	/* usb role switch */
 	if (extcon->role_sw)
 		usb_role_switch_set_role(extcon->role_sw, new_dr);
-	else {
-		/* none -> device */
-		if (cur_dr == USB_ROLE_NONE && new_dr == USB_ROLE_DEVICE) {
-			extcon_set_state_sync(extcon->edev, EXTCON_USB, true);
-		/* none -> host */
-		} else if (cur_dr == USB_ROLE_NONE && new_dr == USB_ROLE_HOST) {
-			extcon_set_state_sync(extcon->edev,
-							EXTCON_USB_HOST, true);
-		/* device -> none */
-		} else if (cur_dr == USB_ROLE_DEVICE &&
-				new_dr == USB_ROLE_NONE) {
-			extcon_set_state_sync(extcon->edev, EXTCON_USB, false);
-		/* host -> none */
-		} else if (cur_dr == USB_ROLE_HOST && new_dr == USB_ROLE_NONE) {
-			extcon_set_state_sync(extcon->edev,
-							EXTCON_USB_HOST, false);
-		/* device -> host */
-		} else if (cur_dr == USB_ROLE_DEVICE &&
-				new_dr == USB_ROLE_HOST) {
-			extcon_set_state_sync(extcon->edev, EXTCON_USB, false);
-			extcon_set_state_sync(extcon->edev,
-							EXTCON_USB_HOST, true);
-		/* host -> device */
-		} else if (cur_dr == USB_ROLE_HOST &&
-				new_dr == USB_ROLE_DEVICE) {
-			extcon_set_state_sync(extcon->edev,
-							EXTCON_USB_HOST, false);
-			extcon_set_state_sync(extcon->edev, EXTCON_USB, true);
-		}
-	}
 
 	kfree(role);
 }
