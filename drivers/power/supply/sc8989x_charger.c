@@ -29,6 +29,22 @@
 #include "mtk_charger.h"
 #include "../../misc/mediatek/usb/usb20/mtk_musb.h"
 
+static bool sc8989x_pd_is_online(void)
+{
+	struct power_supply *psy;
+	struct mtk_charger *info;
+	bool online = false;
+
+	psy = power_supply_get_by_name("mtk-master-charger");
+	if (!psy)
+		return false;
+	info = power_supply_get_drvdata(psy);
+	if (info)
+		online = info->ta_status[PD] == TA_ATTACH;
+	power_supply_put(psy);
+	return online;
+}
+
 enum sc8989x_part_id {
 	BQ25890 = 0x03,
 	SC8989X = 0x04,
@@ -1713,10 +1729,7 @@ static void sc8989x_set_chg_type(struct sc8989x_chip *sc, int type)
 {
 	switch (type) {
 	case VBUS_STAT_SDP:
-		if (sc->vbus_good && charger_manager_pd_is_online())
-			sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
-		else
-			sc->psy_desc.type = POWER_SUPPLY_TYPE_USB;
+		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB;
 		break;
 	case VBUS_STAT_CDP:
 		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
@@ -2304,16 +2317,12 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 		val->intval = data * 1000;
 		break;
 	case POWER_SUPPLY_PROP_USB_TYPE:
-		if (sc->psy_usb_type != POWER_SUPPLY_USB_TYPE_UNKNOWN) {
-			if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP &&
-			    sc->vbus_good && charger_manager_pd_is_online())
-				val->intval = POWER_SUPPLY_USB_TYPE_PD;
-			else
-				val->intval = sc->psy_usb_type;
-		} else if (sc->vbus_good)
+		if (sc->vbus_good && sc8989x_pd_is_online() &&
+		    (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP ||
+		     sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_UNKNOWN))
 			val->intval = POWER_SUPPLY_USB_TYPE_PD;
 		else
-			val->intval = POWER_SUPPLY_USB_TYPE_UNKNOWN;
+			val->intval = sc->psy_usb_type;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP)
