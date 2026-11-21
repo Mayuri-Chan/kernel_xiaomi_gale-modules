@@ -26,6 +26,7 @@
 #include <linux/version.h>
 
 #include "charger_class.h"
+#include "mtk_charger.h"
 #include "../../misc/mediatek/usb/usb20/mtk_musb.h"
 
 enum sc8989x_part_id {
@@ -1132,6 +1133,10 @@ static int sc8989x_get_charge_stat(struct sc8989x_chip *sc)
 
 	if (vbus_stat == VBUS_STAT_OTG) {
 		return POWER_SUPPLY_STATUS_DISCHARGING;
+	} else if (chg_stat == CHG_STAT_CHARGE_DONE) {
+		return POWER_SUPPLY_STATUS_FULL;
+	} else if (sc->vbus_good) {
+		return POWER_SUPPLY_STATUS_CHARGING;
 	} else {
 		switch (chg_stat) {
 		case CHG_STAT_NOT_CHARGE:
@@ -1708,13 +1713,19 @@ static void sc8989x_set_chg_type(struct sc8989x_chip *sc, int type)
 {
 	switch (type) {
 	case VBUS_STAT_SDP:
-		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB;
+		if (sc->vbus_good && charger_manager_pd_is_online())
+			sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
+		else
+			sc->psy_desc.type = POWER_SUPPLY_TYPE_USB;
 		break;
 	case VBUS_STAT_CDP:
 		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
 		break;
 	case VBUS_STAT_NO_INPUT:
 		sc->psy_desc.type = POWER_SUPPLY_TYPE_UNKNOWN;
+		break;
+	case VBUS_STAT_HVDCP:
+		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_ACA;
 		break;
 	default:
 		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
@@ -1804,7 +1815,7 @@ static int sc8989x_get_charger_type(struct sc8989x_chip *sc)
 		sc->chg_type = STANDARD_CHARGER;
 		break;
 	case VBUS_STAT_HVDCP:
-		sc->psy_usb_type = POWER_SUPPLY_USB_TYPE_DCP;
+		sc->psy_usb_type = POWER_SUPPLY_USB_TYPE_ACA;
 		sc->chg_type = HVDCP_CHARGER;
 		sc8989x_set_dpdm_hvdcp_9v(sc);
 		break;
@@ -2212,6 +2223,8 @@ static enum power_supply_usb_type sc8989x_chg_psy_usb_types[] = {
 	POWER_SUPPLY_USB_TYPE_SDP,
 	POWER_SUPPLY_USB_TYPE_CDP,
 	POWER_SUPPLY_USB_TYPE_DCP,
+	POWER_SUPPLY_USB_TYPE_ACA,
+	POWER_SUPPLY_USB_TYPE_PD,
 };
 
 static int sc8989x_chg_property_is_writeable(struct power_supply *psy,
@@ -2291,7 +2304,16 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 		val->intval = data * 1000;
 		break;
 	case POWER_SUPPLY_PROP_USB_TYPE:
-		val->intval = sc->psy_usb_type;
+		if (sc->psy_usb_type != POWER_SUPPLY_USB_TYPE_UNKNOWN) {
+			if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP &&
+			    sc->vbus_good && charger_manager_pd_is_online())
+				val->intval = POWER_SUPPLY_USB_TYPE_PD;
+			else
+				val->intval = sc->psy_usb_type;
+		} else if (sc->vbus_good)
+			val->intval = POWER_SUPPLY_USB_TYPE_PD;
+		else
+			val->intval = POWER_SUPPLY_USB_TYPE_UNKNOWN;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP)

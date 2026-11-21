@@ -559,7 +559,7 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 
 	if (of_property_read_u32(np, "ac_charger_current", &val) >= 0)
 		info->data.ac_charger_current = val;
-	if (of_property_read_u32(np, "ac-charger-current", &val) >= 0)
+	else if (of_property_read_u32(np, "ac-charger-current", &val) >= 0)
 		info->data.ac_charger_current = val;
 	else {
 		chr_err("use default AC_CHARGER_CURRENT:%d\n",
@@ -576,6 +576,21 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 			AC_CHARGER_INPUT_CURRENT);
 		info->data.ac_charger_input_current = AC_CHARGER_INPUT_CURRENT;
 	}
+
+	if (of_property_read_u32(np, "hvdcp_charger_current", &val) >= 0)
+		info->data.hvdcp_charger_current = val;
+	else if (of_property_read_u32(np, "hvdcp-charger-current", &val) >= 0)
+		info->data.hvdcp_charger_current = val;
+	else
+		info->data.hvdcp_charger_current = info->data.ac_charger_current;
+
+	if (of_property_read_u32(np, "hvdcp_charger_input_current", &val) >= 0)
+		info->data.hvdcp_charger_input_current = val;
+	else if (of_property_read_u32(np, "hvdcp-charger-input-current", &val) >= 0)
+		info->data.hvdcp_charger_input_current = val;
+	else
+		info->data.hvdcp_charger_input_current =
+					info->data.ac_charger_input_current;
 
 	if (of_property_read_u32(np, "charging_host_charger_current", &val)
 		>= 0) {
@@ -3095,6 +3110,8 @@ static char *dump_charger_type(int chg_type, int usb_type)
 		return "usb-h";
 	case POWER_SUPPLY_TYPE_USB_DCP:
 		return "std";
+	case POWER_SUPPLY_TYPE_USB_ACA:
+		return "hvdcp";
 	//case POWER_SUPPLY_TYPE_USB_FLOAT:
 	//	return "nonstd";
 	default:
@@ -3171,6 +3188,7 @@ static int charger_routine_thread(void *arg)
 		check_dynamic_mivr(info);
 		charger_check_status(info);
 		mtk_check_ta_status(info);
+		info->usb_type = get_usb_type(info);
 		kpoc_power_off_check(info);
 
 		if (!info->cs_hw_disable)

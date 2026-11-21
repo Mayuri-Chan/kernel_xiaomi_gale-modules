@@ -101,6 +101,7 @@
 &charger {
 	charger = <&sc8989x_chg>;
 	/delete-property/ enable_dynamic_mivr;
+	/delete-property/ enable_fast_charging_indicator;
 	/delete-property/ jeita_temp_above_t4_cv;
 	enable_sw_jeita;
 	enable_sw_ffc;

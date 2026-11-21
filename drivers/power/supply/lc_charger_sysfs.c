@@ -418,7 +418,7 @@ static int lc_psy_notify(struct notifier_block *nb,
 	if (data != lc->primary && data != lc->master && data != lc->battery)
 		return NOTIFY_DONE;
 	type = lc_charge_type();
-	lc->quick_charge_type = type == 6 || type == 7;
+	lc->quick_charge_type = type == 5 || type == 6;
 	if (lc->usb)
 		power_supply_changed(lc->usb);
 	return NOTIFY_OK;

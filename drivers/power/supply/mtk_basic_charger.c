@@ -111,9 +111,10 @@ static bool is_typec_adapter(struct mtk_charger *info)
 	rp = adapter_dev_get_property(info->adapter_dev[PD], TYPEC_RP_LEVEL);
 	cap_type = adapter_dev_get_property(info->adapter_dev[PD], CAP_TYPE);
 	if (cap_type == MTK_CAP_TYPE_UNKNOWN &&
-			rp != 500 &&
+			rp > 500 &&
 			info->chr_type != POWER_SUPPLY_TYPE_USB &&
-			info->chr_type != POWER_SUPPLY_TYPE_USB_CDP)
+			info->chr_type != POWER_SUPPLY_TYPE_USB_CDP &&
+			info->chr_type != POWER_SUPPLY_TYPE_USB_ACA)
 		return true;
 
 	return false;
@@ -210,6 +211,11 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 			info->data.charging_host_charger_current;
 		is_basic = true;
 
+	} else if (info->chr_type == POWER_SUPPLY_TYPE_USB_ACA) {
+		pdata->input_current_limit =
+			info->data.hvdcp_charger_input_current;
+		pdata->charging_current_limit =
+			info->data.hvdcp_charger_current;
 	} else if (info->chr_type == POWER_SUPPLY_TYPE_USB_DCP) {
 		pdata->input_current_limit =
 			info->data.ac_charger_input_current;
@@ -221,12 +227,13 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 			pdata2->charging_current_limit = 2000000;
 		}
 	} else if (info->chr_type == POWER_SUPPLY_TYPE_USB &&
-	    info->usb_type == POWER_SUPPLY_USB_TYPE_DCP) {
-		/* NONSTANDARD_CHARGER */
+	    (info->usb_type == POWER_SUPPLY_USB_TYPE_DCP ||
+	     info->usb_type == POWER_SUPPLY_USB_TYPE_PD)) {
+		/* NONSTANDARD_CHARGER or PD */
 		pdata->input_current_limit =
-			info->data.usb_charger_current;
+			info->data.ac_charger_input_current;
 		pdata->charging_current_limit =
-			info->data.usb_charger_current;
+			info->data.ac_charger_current;
 		is_basic = true;
 	} else {
 		/*chr_type && usb_type cannot match above, set 500mA*/

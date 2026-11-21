@@ -230,6 +230,8 @@ struct charger_custom_data {
 	int usb_charger_current;
 	int ac_charger_current;
 	int ac_charger_input_current;
+	int hvdcp_charger_current;
+	int hvdcp_charger_input_current;
 	int charging_host_charger_current;
 
 	/* sw jeita */

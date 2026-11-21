@@ -1128,6 +1128,8 @@ static int bs_psy_get_property(struct power_supply *psy,
 			}
 		if (qmax != 0)
 			val->intval = cycle / qmax;
+		if (bm->gm1 != NULL)
+			val->intval = bm->gm1->bat_cycle;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY: //sum(uisoc)
 		/* 1 = META_BOOT, 4 = FACTORY_BOOT 5=ADVMETA_BOOT */
@@ -1317,6 +1319,10 @@ static int bs_psy_set_property(struct power_supply *psy,
 
 	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
 	switch (psp) {
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		if (bm->gm1 != NULL)
+			bm->gm1->bat_cycle = val->intval;
+		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (val->intval > 0)
 			bm_send_cmd(bm, MANAGER_DYNAMIC_CV, val->intval);
