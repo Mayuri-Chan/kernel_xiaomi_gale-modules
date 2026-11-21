@@ -5284,8 +5284,7 @@ void fg_sw_bat_cycle_accu(struct mtk_battery *gm)
 		gm->bat_cycle_thr);
 
 	gauge_version = gauge_get_int_property(gm, GAUGE_PROP_HW_VERSION);
-	if (gauge_version >= GAUGE_HW_V1000 &&
-		gauge_version < GAUGE_HW_V2000) {
+	if (gauge_version >= GAUGE_HW_V1000) {
 		if (gm->bat_cycle_thr > 0 &&
 			gm->bat_cycle_ncar >= gm->bat_cycle_thr) {
 			tmp_ncar = gm->bat_cycle_ncar;
@@ -5776,6 +5775,12 @@ static int mtk_battery_manager_send(struct mtk_battery *gm, enum manager_cmd cmd
 			wakeup_fg_algo_cmd(gm, FG_INTR_KERNEL_CMD,
 					FG_KERNEL_CMD_GET_DYNAMIC_CV, (val / 100));
 		break;
+	case MANAGER_SET_BAT_CYCLE:
+		gm->bat_cycle = val;
+		wakeup_fg_algo_cmd(gm, FG_INTR_KERNEL_CMD,
+				FG_KERNEL_CMD_REQ_CHANGE_BAT_CYCLE, val);
+		bm_err(gm, "%s set bat_cycle to %d\n", __func__, val);
+		break;
 	default:
 		bm_err(gm, "%s undefined battery manager command\n",__func__);
 		break;
@@ -5848,12 +5853,13 @@ int mtk_battery_daemon_init(struct platform_device *pdev)
 	}
 
 	if (hw_version >= GAUGE_HW_V1000) {
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[NAFG_IRQ],
-		NULL, nafg_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_nafg",
-		gm);
+		if (gm->gauge->irq_no[NAFG_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[NAFG_IRQ],
+			NULL, nafg_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_nafg",
+			gm);
 		if (hw_version < GAUGE_HW_V2000) {
 #if IS_ENABLED(CONFIG_PMIC_LBAT_SERVICE)
 			gm->lowbat_service =
@@ -5891,68 +5897,77 @@ int mtk_battery_daemon_init(struct platform_device *pdev)
 	}
 
 	if (hw_version >= GAUGE_HW_V2000) {
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[BAT_PLUGOUT_IRQ],
-		NULL, bat_plugout_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_bat_plugout",
-		gm);
+		if (gm->gauge->irq_no[BAT_PLUGOUT_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[BAT_PLUGOUT_IRQ],
+			NULL, bat_plugout_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_bat_plugout",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[BAT_PLUGIN_IRQ],
-		NULL, bat_plugin_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_bat_plugin",
-		gm);
+		if (gm->gauge->irq_no[BAT_PLUGIN_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[BAT_PLUGIN_IRQ],
+			NULL, bat_plugin_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_bat_plugin",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[FG_N_CHARGE_L_IRQ],
-		NULL, cycle_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_cycle_zcv",
-		gm);
+		if (gm->gauge->irq_no[FG_N_CHARGE_L_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[FG_N_CHARGE_L_IRQ],
+			NULL, cycle_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_cycle_zcv",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[FG_IAVG_H_IRQ],
-		NULL, iavg_h_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_iavg_h",
-		gm);
+		if (gm->gauge->irq_no[FG_IAVG_H_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[FG_IAVG_H_IRQ],
+			NULL, iavg_h_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_iavg_h",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[FG_IAVG_L_IRQ],
-		NULL, iavg_l_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_iavg_l",
-		gm);
+		if (gm->gauge->irq_no[FG_IAVG_L_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[FG_IAVG_L_IRQ],
+			NULL, iavg_l_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_iavg_l",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[BAT_TMP_H_IRQ],
-		NULL, bat_temp_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_bat_tmp_h",
-		gm);
+		if (gm->gauge->irq_no[BAT_TMP_H_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[BAT_TMP_H_IRQ],
+			NULL, bat_temp_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_bat_tmp_h",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[BAT_TMP_L_IRQ],
-		NULL, bat_temp_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_bat_tmp_l",
-		gm);
+		if (gm->gauge->irq_no[BAT_TMP_L_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[BAT_TMP_L_IRQ],
+			NULL, bat_temp_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_bat_tmp_l",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[VBAT_H_IRQ],
-		NULL, vbat_h_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_vbat_high",
-		gm);
+		if (gm->gauge->irq_no[VBAT_H_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[VBAT_H_IRQ],
+			NULL, vbat_h_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_vbat_high",
+			gm);
 
-		ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
-		gm->gauge->irq_no[VBAT_L_IRQ],
-		NULL, vbat_l_irq,
-		IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-		"mtk_gauge_vbat_low",
-		gm);
+		if (gm->gauge->irq_no[VBAT_L_IRQ] > 0)
+			ret |= devm_request_threaded_irq(&gm->gauge->pdev->dev,
+			gm->gauge->irq_no[VBAT_L_IRQ],
+			NULL, vbat_l_irq,
+			IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
+			"mtk_gauge_vbat_low",
+			gm);
 	}
 
 	if (ret)

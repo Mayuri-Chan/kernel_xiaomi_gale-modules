@@ -121,6 +121,7 @@ enum manager_cmd {
 	MANAGER_NOTIFY_CHR_FULL,
 	MANAGER_SW_BAT_CYCLE_ACCU,
 	MANAGER_DYNAMIC_CV,
+	MANAGER_SET_BAT_CYCLE,
 };
 
 enum battery_property {

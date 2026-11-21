@@ -1322,6 +1322,7 @@ static int bs_psy_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		if (bm->gm1 != NULL)
 			bm->gm1->bat_cycle = val->intval;
+		bm_send_cmd(bm, MANAGER_SET_BAT_CYCLE, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (val->intval > 0)
