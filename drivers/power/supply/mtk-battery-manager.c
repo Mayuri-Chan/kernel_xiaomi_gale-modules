@@ -1477,7 +1477,7 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->bat_status = POWER_SUPPLY_STATUS_DISCHARGING,
 	bs_data->bat_health = POWER_SUPPLY_HEALTH_GOOD,
 	bs_data->bat_present = 1,
-	bs_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LION,
+	bs_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LIPO,
 	bs_data->bat_capacity = -1,
 	bs_data->bat_batt_vol = 0,
 	bs_data->bat_batt_temp = 0,
