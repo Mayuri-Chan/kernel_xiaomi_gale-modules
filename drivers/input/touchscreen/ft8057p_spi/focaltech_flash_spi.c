@@ -1120,7 +1120,16 @@ static void fts_fwres_work(struct work_struct *work)
 
 static void fts_fwresume_callback(void)
 {
+    struct fts_ts_data *ts_data = fts_data;
+
+    if (!ts_data) {
+        fts_enter_normal_fw();
+        return;
+    }
+
+    mutex_lock(&ts_data->state_mutex);
     fts_enter_normal_fw();
+    mutex_unlock(&ts_data->state_mutex);
 }
 #else
 int fts_enter_normal_fw(void)

@@ -238,6 +238,7 @@ struct fts_ts_data {
     spinlock_t irq_lock;
     struct mutex report_mutex;
     struct mutex bus_lock;
+    struct mutex state_mutex;
     unsigned long intr_jiffies;
     int irq;
     int log_level;
@@ -251,6 +252,8 @@ struct fts_ts_data {
     struct mtk_chip_config spi_ctrl;
 #endif
     bool suspended;
+    bool unblanking;
+    bool irq_wake_enabled;
     bool fw_loading;
     bool irq_disabled;
     bool power_disabled;
@@ -416,6 +419,7 @@ int fts_ex_mode_recovery(struct fts_ts_data *ts_data);
 
 void fts_irq_disable(void);
 void fts_irq_enable(void);
+void fts_irq_wake_enable(struct fts_ts_data *ts_data, bool enable);
 
 #if FTS_PSENSOR_EN
 int fts_proximity_init(void);

@@ -438,9 +438,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
     int ret = 0;
 
     FTS_FUNC_ENTER();
-    if (enable_irq_wake(ts_data->irq)) {
-        FTS_DEBUG("enable_irq_wake(irq:%d) fail", ts_data->irq);
-    }
+    fts_irq_wake_enable(ts_data, true);
 #if FTS_THREE_IN_ONE
     ret = fts_enter_gesture_fw();
     lcd_gesture_flag = true;
@@ -479,9 +477,7 @@ int fts_gesture_resume(struct fts_ts_data *ts_data)
     u8 state = 0xFF;
 
     FTS_FUNC_ENTER();
-    if (disable_irq_wake(ts_data->irq)) {
-        FTS_DEBUG("disable_irq_wake(irq:%d) fail", ts_data->irq);
-    }
+    fts_irq_wake_enable(ts_data, false);
 
     for (i = 0; i < 5; i++) {
         fts_write_reg(FTS_REG_GESTURE_EN, DISABLE);

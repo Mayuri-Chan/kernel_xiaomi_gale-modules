@@ -205,7 +205,7 @@ int fts_proximity_recovery(struct fts_ts_data *ts_data)
     return ret;
 }
 
-int fts_set_proximity_switch(int proximity_switch)
+static int fts_set_proximity_switch_locked(int proximity_switch)
 {
     int ret = 0;
     struct fts_ts_data *ts_data = fts_data;
@@ -228,26 +228,50 @@ int fts_set_proximity_switch(int proximity_switch)
     }
 #if FTS_PSENSOR_ENABLE
     if (!proximity_switch && ts_data->suspended && fts_proximity_suspend_flag) {
-        FTS_INFO("proximity switch turned off while suspended, entering gesture/sleep suspend");
         fts_proximity_suspend_flag = false;
-        if (ts_data->gesture_support) {
-            fts_gesture_suspend(ts_data);
+        if (ts_data->unblanking) {
+            FTS_INFO("proximity switch turned off while unblanking, skip gesture/sleep suspend");
         } else {
-            fts_irq_disable();
-            FTS_INFO("make TP enter into sleep mode");
-            ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
-            if (ret < 0)
-                FTS_ERROR("set TP to sleep mode fail, ret=%d", ret);
+            FTS_INFO("proximity switch turned off while suspended, entering gesture/sleep suspend");
+            if (ts_data->gesture_support) {
+                fts_gesture_suspend(ts_data);
+            } else {
+                fts_irq_disable();
+                FTS_INFO("make TP enter into sleep mode");
+                ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
+                if (ret < 0)
+                    FTS_ERROR("set TP to sleep mode fail, ret=%d", ret);
+            }
         }
     } else if (proximity_switch && ts_data->suspended && !fts_proximity_suspend_flag) {
-        FTS_INFO("proximity switch turned on while suspended, exiting gesture for proximity");
-        if (ts_data->gesture_support) {
-            fts_gesture_resume(ts_data);
+        if (ts_data->unblanking) {
+            FTS_INFO("proximity switch turned on while unblanking, deferring to resume");
+        } else {
+            FTS_INFO("proximity switch turned on while suspended, exiting gesture for proximity");
+            if (ts_data->gesture_support) {
+                fts_gesture_resume(ts_data);
+            }
+            fts_proximity_suspend_flag = true;
         }
-        fts_proximity_suspend_flag = true;
     }
 #endif
     mutex_unlock(&ts_data->input_dev->mutex);
+    return ret;
+}
+
+int fts_set_proximity_switch(int proximity_switch)
+{
+    int ret;
+    struct fts_ts_data *ts_data = fts_data;
+
+    if (!ts_data) {
+        FTS_ERROR("ts_data is NULL!\n");
+        return -EINVAL;
+    }
+
+    mutex_lock(&ts_data->state_mutex);
+    ret = fts_set_proximity_switch_locked(proximity_switch);
+    mutex_unlock(&ts_data->state_mutex);
     return ret;
 }
 EXPORT_SYMBOL_GPL(fts_set_proximity_switch);
@@ -436,6 +460,28 @@ void fts_irq_enable(void)
 
     spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
     FTS_FUNC_EXIT();
+}
+
+void fts_irq_wake_enable(struct fts_ts_data *ts_data, bool enable)
+{
+    if (!ts_data)
+        return;
+
+    if (enable) {
+        if (!ts_data->irq_wake_enabled) {
+            if (enable_irq_wake(ts_data->irq) == 0)
+                ts_data->irq_wake_enabled = true;
+            else
+                FTS_DEBUG("enable_irq_wake(irq:%d) fail", ts_data->irq);
+        }
+    } else {
+        if (ts_data->irq_wake_enabled) {
+            if (disable_irq_wake(ts_data->irq) == 0)
+                ts_data->irq_wake_enabled = false;
+            else
+                FTS_DEBUG("disable_irq_wake(irq:%d) fail", ts_data->irq);
+        }
+    }
 }
 
 void fts_hid2std(void)
@@ -1987,31 +2033,34 @@ static int fts_ts_suspend(struct device *dev)
     struct fts_ts_data *ts_data = fts_data;
 
     FTS_FUNC_ENTER();
+    mutex_lock(&ts_data->state_mutex);
+    ts_data->unblanking = false;
+
     if (ts_data->suspended) {
         if (ts_data->gesture_support) {
             u8 val = 0;
             ret = fts_read_reg(FTS_REG_GESTURE_EN, &val);
             if (ret >= 0 && val == ENABLE) {
                 FTS_INFO("Already in suspend state with gesture enabled");
-                return 0;
+                goto out_unlock;
             }
 #if FTS_PSENSOR_ENABLE
             if (fts_proximity_data.mode == ENABLE) {
                 FTS_INFO("Already in suspend state with proximity enabled");
-                return 0;
+                goto out_unlock;
             }
 #endif
             FTS_INFO("Suspended but gesture not enabled, entering gesture suspend");
             fts_gesture_suspend(ts_data);
-            return 0;
+            goto out_unlock;
         }
         FTS_INFO("Already in suspend state");
-        return 0;
+        goto out_unlock;
     }
 
     if (ts_data->fw_loading) {
         FTS_INFO("fw upgrade in process, can't suspend");
-        return 0;
+        goto out_unlock;
     }
 
 #if FTS_PSENSOR_ENABLE
@@ -2020,7 +2069,7 @@ static int fts_ts_suspend(struct device *dev)
         fts_proximity_suspend_flag = true;
         fts_release_all_finger();
         ts_data->suspended = true;
-        return 0;
+        goto out_unlock;
     }
 #endif
 
@@ -2028,7 +2077,7 @@ static int fts_ts_suspend(struct device *dev)
     if (fts_proximity_suspend() == 0) {
         fts_release_all_finger();
         ts_data->suspended = true;
-        return 0;
+        goto out_unlock;
     }
 #endif
 
@@ -2062,6 +2111,9 @@ static int fts_ts_suspend(struct device *dev)
 
     fts_release_all_finger();
     ts_data->suspended = true;
+
+out_unlock:
+    mutex_unlock(&ts_data->state_mutex);
     FTS_FUNC_EXIT();
     return 0;
 }
@@ -2071,40 +2123,40 @@ static int fts_ts_resume(struct device *dev)
     struct fts_ts_data *ts_data = fts_data;
 
     FTS_FUNC_ENTER();
+    mutex_lock(&ts_data->state_mutex);
+
+#if IS_ENABLED(CONFIG_PM) && FTS_PATCH_COMERR_PM
+    if (ts_data->pm_suspend) {
+        int pm_ret = wait_for_completion_timeout(&ts_data->pm_completion,
+                                                 msecs_to_jiffies(FTS_TIMEOUT_COMERR_PM));
+        if (!pm_ret)
+            FTS_ERROR("Bus don't resume from pm(deep),timeout");
+    }
+#endif
+
+    ts_data->unblanking = false;
     if (!ts_data->suspended) {
         FTS_DEBUG("Already in awake state");
-        return 0;
+        goto out_unlock;
     }
 
 #if FTS_PSENSOR_ENABLE
-    if (tp_proximity_event) {
-        fts_set_proximity_switch(ENABLE);
-    }
+    fts_proximity_suspend_flag = false;
+    fts_irq_wake_enable(ts_data, false);
+#endif
+
     ts_data->suspended = false;
     fts_release_all_finger();
 
-    if ((!fts_proximity_resume()) && (fts_proximity_suspend_flag == true)) {
-        if (disable_irq_wake(ts_data->irq))
-            FTS_DEBUG("disable_irq_wake(irq:%d) fail", ts_data->irq);
-        if (ts_data->gesture_support)
-            fts_gesture_resume(ts_data);
-        fts_proximity_suspend_flag = false;
-        ts_data->suspended = false;
-        return 0;
-    }
-#endif
-
 #if FTS_PSENSOR_EN
     if (fts_proximity_resume() == 0) {
-        ts_data->suspended = false;
-        return 0;
+        goto out_unlock;
     }
 #endif
 
-	if (!ts_data->gesture_support) {
-		fts_irq_enable();
-	}
-
+    if (!ts_data->gesture_support) {
+        fts_irq_enable();
+    }
 
     if (!ts_data->ic_info.is_incell) {
 #if FTS_POWER_SOURCE_CUST_EN
@@ -2113,11 +2165,14 @@ static int fts_ts_resume(struct device *dev)
         fts_reset_proc(200);
     }
 
-    /*else {
-    	fts_enter_normal_fw();
+    if (fts_wait_tp_to_valid() < 0) {
+#if FTS_THREE_IN_ONE
+        FTS_INFO("TP not valid on resume, reloading normal fw");
+        fts_enter_normal_fw();
+        fts_wait_tp_to_valid();
+#endif
     }
-    */
-    fts_wait_tp_to_valid();
+
     fts_ex_mode_recovery(ts_data);
 
     fts_esdcheck_resume(ts_data);
@@ -2128,24 +2183,31 @@ static int fts_ts_resume(struct device *dev)
 #if LCT_TP_WORK_EN
     if (get_lct_tp_work_status())
         fts_irq_enable();
-    else
-    {
+    else {
         fts_irq_disable();
         fts_release_all_finger();
         FTS_ERROR("Touchscreen Disabled, Can't enable irq.");
     }
 #else
-        fts_irq_enable();
+    fts_irq_enable();
 #endif
 
     if (ts_data->palm_sensor_switch)
         fts_palm_sensor_cmd(ts_data->palm_sensor_switch);
 
-#if LCT_TP_USB_PLUGIN
-	if (g_touchscreen_usb_pulgin.valid)
-		g_touchscreen_usb_pulgin.event_callback();
+#if FTS_PSENSOR_ENABLE
+    if (tp_proximity_event) {
+        fts_set_proximity_switch_locked(ENABLE);
+    }
 #endif
 
+#if LCT_TP_USB_PLUGIN
+    if (g_touchscreen_usb_pulgin.valid)
+        g_touchscreen_usb_pulgin.event_callback();
+#endif
+
+out_unlock:
+    mutex_unlock(&ts_data->state_mutex);
     FTS_FUNC_EXIT();
     return 0;
 }
@@ -2174,6 +2236,10 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
         if ((blank_enum[1] == blank_value) && (event_enum[1] == event)) {
             flush_workqueue(fts_data->ts_workqueue);
             queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
+        } else if ((blank_enum[1] == blank_value) && (event_enum[0] == event)) {
+            mutex_lock(&ts_data->state_mutex);
+            ts_data->unblanking = true;
+            mutex_unlock(&ts_data->state_mutex);
         } else if ((blank_enum[0] == blank_value) && (event_enum[0] == event)) {
             flush_workqueue(fts_data->ts_workqueue);
             fts_ts_suspend(ts_data->dev);
@@ -2316,6 +2382,7 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     spin_lock_init(&ts_data->irq_lock);
     mutex_init(&ts_data->report_mutex);
     mutex_init(&ts_data->bus_lock);
+    mutex_init(&ts_data->state_mutex);
     init_waitqueue_head(&ts_data->ts_waitqueue);
 
     ret = fts_bus_init(ts_data);
