@@ -305,9 +305,9 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 			pdata->charging_current_limit) {
 			pdata->charging_current_limit =
 					pdata->thermal_charging_current_limit;
-			info->setting.charging_current_limit1 =
-					pdata->thermal_charging_current_limit;
 		}
+		info->setting.charging_current_limit1 =
+				pdata->thermal_charging_current_limit;
 		pdata->thermal_throttle_record = true;
 	} else
 		info->setting.charging_current_limit1 = info->sc.sc_ibat;
@@ -317,9 +317,9 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 			pdata->input_current_limit) {
 			pdata->input_current_limit =
 					pdata->thermal_input_current_limit;
-			info->setting.input_current_limit1 =
-					pdata->input_current_limit;
 		}
+		info->setting.input_current_limit1 =
+				pdata->thermal_input_current_limit;
 		pdata->thermal_throttle_record = true;
 	} else
 		info->setting.input_current_limit1 = -1;
